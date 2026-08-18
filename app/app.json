@@ -1,0 +1,48 @@
+{
+  "expo": {
+    "name": "Baseline",
+    "slug": "baseline",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "baseline",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "backgroundColor": "#F6F8F7",
+      "resizeMode": "contain"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.sanketnaik.baseline",
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "remote-notification"
+        ]
+      }
+    },
+    "android": {
+      "package": "com.sanketnaik.baseline",
+      "adaptiveIcon": {
+        "backgroundColor": "#0E6B5B"
+      },
+      "permissions": [
+        "POST_NOTIFICATIONS",
+        "SCHEDULE_EXACT_ALARM"
+      ],
+      "edgeToEdgeEnabled": true
+    },
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "color": "#0E6B5B",
+          "defaultChannel": "routines"
+        }
+      ],
+      "expo-asset"
+    ],
+    "experiments": {
+      "typedRoutes": false
+    }
+  }
+}

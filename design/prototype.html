@@ -1,0 +1,2089 @@
+<title>TrueBurn — Today &amp; Routines</title>
+
+<style>
+  :root {
+    --ground:#F6F8F7; --surface:#FFFFFF; --sunken:#F0F3F2;
+    --ink:#141C1A; --ink-2:#5C6B66; --ink-3:#8B9A94; --line:#E1E7E4;
+    --accent:#0E6B5B; --accent-soft:#E4F0EC; --accent-2:#2E9B7F;
+    --warn:#9A5B0C; --warn-soft:#F7EFE1;
+    --shell:#DCE1DF; --bezel:#C6CECB; --on-accent:#FFFFFF;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+    --r:14px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --ground:#0E1513; --surface:#151E1B; --sunken:#111917;
+      --ink:#E9EFEC; --ink-2:#9DACA7; --ink-3:#6E7D78; --line:#24302C;
+      --accent:#46C0A4; --accent-soft:#17322B; --accent-2:#2E8C77;
+      --warn:#D69A4E; --warn-soft:#2C2317;
+      --shell:#070B0A; --bezel:#1D2725; --on-accent:#08110F; }
+  }
+  :root[data-theme="dark"] { --ground:#0E1513; --surface:#151E1B; --sunken:#111917;
+    --ink:#E9EFEC; --ink-2:#9DACA7; --ink-3:#6E7D78; --line:#24302C;
+    --accent:#46C0A4; --accent-soft:#17322B; --accent-2:#2E8C77;
+    --warn:#D69A4E; --warn-soft:#2C2317;
+    --shell:#070B0A; --bezel:#1D2725; --on-accent:#08110F; }
+  :root[data-theme="light"] { --ground:#F6F8F7; --surface:#FFFFFF; --sunken:#F0F3F2;
+    --ink:#141C1A; --ink-2:#5C6B66; --ink-3:#8B9A94; --line:#E1E7E4;
+    --accent:#0E6B5B; --accent-soft:#E4F0EC; --accent-2:#2E9B7F;
+    --warn:#9A5B0C; --warn-soft:#F7EFE1;
+    --shell:#DCE1DF; --bezel:#C6CECB; --on-accent:#FFFFFF; }
+
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--ground); color:var(--ink); font-family:var(--sans);
+         font-size:15px; line-height:1.55; -webkit-font-smoothing:antialiased; }
+
+  .page { max-width:1180px; margin:0 auto; padding:56px 24px 80px;
+          display:flex; flex-direction:column; gap:56px; }
+  .masthead { display:flex; flex-direction:column; gap:14px; max-width:62ch; }
+  .eyebrow { margin:0; font-family:var(--mono); font-size:11px; letter-spacing:.13em;
+             text-transform:uppercase; color:var(--accent); }
+  .masthead h1 { margin:0; font-size:clamp(30px,4.6vw,44px); line-height:1.08;
+                 letter-spacing:-.022em; font-weight:600; text-wrap:balance; }
+  .lede { margin:0; color:var(--ink-2); font-size:17px; max-width:60ch; }
+
+  .stage { display:flex; flex-wrap:wrap; gap:40px; align-items:flex-start; }
+  .device { margin:0; display:flex; flex-direction:column; gap:14px; }
+  .screen { position:relative; width:372px; height:748px; background:var(--ground);
+            border:1px solid var(--bezel); border-radius:30px; overflow:hidden;
+            display:flex; flex-direction:column;
+            box-shadow:0 1px 2px rgba(0,0,0,.05),0 18px 44px -22px rgba(0,0,0,.35); }
+  .statusbar { flex:none; display:flex; justify-content:space-between; align-items:center;
+               padding:13px 22px 6px; font-family:var(--mono); font-size:11px;
+               color:var(--ink-3); letter-spacing:.02em; }
+  .viewport { flex:1; overflow-y:auto; overflow-x:hidden; padding:6px 18px 22px;
+              display:flex; flex-direction:column; gap:18px; scrollbar-width:thin; }
+  /* Cards must never compress — the viewport scrolls instead. Without this, a card whose
+     height comes from CSS rather than from text (the water canvas, whose only children
+     are a canvas and an absolutely-positioned overlay) has a min-content height of zero
+     and flex-shrinks to a hairline as soon as the column overflows. */
+  .viewport > * { flex:none; }
+  figcaption { font-size:13px; color:var(--ink-2); display:flex; gap:8px; align-items:baseline; }
+  figcaption b { color:var(--ink); font-weight:600; }
+
+  .screen-head { display:flex; justify-content:space-between; align-items:flex-end; gap:12px; }
+  .screen-head h2 { margin:0; font-size:23px; letter-spacing:-.018em; font-weight:600; }
+  .screen-head .date { font-family:var(--mono); font-size:11px; color:var(--ink-3); }
+
+  /* The date is the history control — no extra icon competing for attention. */
+  .datebtn { display:inline-flex; align-items:center; gap:5px; font-family:var(--mono);
+             font-size:11px; color:var(--ink-3); padding:4px 8px; border-radius:999px;
+             border:1px solid var(--line); transition:all .14s ease; }
+  .datebtn svg { width:12px; height:12px; }
+  .datebtn:hover { color:var(--accent); border-color:var(--accent); background:var(--accent-soft); }
+
+  /* ---- history ---- */
+  .hrow { display:grid; grid-template-columns:62px 1fr 46px 34px; align-items:center; gap:9px;
+          padding:9px 8px; border-radius:10px; text-align:left; width:100%; transition:background .12s ease; }
+  .hrow:hover { background:var(--sunken); }
+  .hrow .hdate { font-family:var(--mono); font-size:10.5px; color:var(--ink-2); letter-spacing:.04em; }
+  .hrow .hkcal, .hrow .hkg { font-family:var(--mono); font-size:11.5px; text-align:right;
+                             font-variant-numeric:tabular-nums; }
+  .hrow .hrem { font-family:var(--mono); font-size:10px; color:var(--ink-3); text-align:right; }
+  .hbar { height:5px; border-radius:3px; background:var(--sunken); overflow:hidden; position:relative; }
+  .hbar i { display:block; height:100%; background:var(--accent); opacity:.75; }
+  .hbar i.over { background:var(--warn); }
+  .hbar .t { position:absolute; top:-1px; bottom:-1px; width:1.5px; background:var(--ink); opacity:.4; }
+
+  .sumcard { display:flex; flex-direction:column; gap:11px; }
+  .sumgrid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
+  .sumgrid div { display:flex; flex-direction:column; gap:2px; }
+  .sumgrid b { font-family:var(--mono); font-size:16px; font-weight:500; letter-spacing:-.02em;
+               font-variant-numeric:tabular-nums; }
+  .sumgrid span { font-size:10px; color:var(--ink-3); }
+  .reconcile { display:flex; justify-content:space-between; gap:10px; font-size:12px;
+               background:var(--accent-soft); color:var(--accent); border-radius:10px; padding:10px 12px; }
+  .reconcile b { font-family:var(--mono); font-variant-numeric:tabular-nums; }
+  .label { font-family:var(--mono); font-size:10px; letter-spacing:.13em;
+           text-transform:uppercase; color:var(--ink-3); }
+
+  .card { background:var(--surface); border:1px solid var(--line); border-radius:var(--r);
+          padding:16px; display:flex; flex-direction:column; gap:12px; }
+  .card.flush { padding:0; overflow:hidden; }
+  .card-body { padding:14px 16px 16px; display:flex; flex-direction:column; gap:12px; }
+
+  .readout-top { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
+  .big { font-family:var(--mono); font-size:46px; line-height:1; letter-spacing:-.035em;
+         font-variant-numeric:tabular-nums; font-weight:500; }
+  .big small { font-size:15px; letter-spacing:0; color:var(--ink-3); margin-left:5px; font-weight:400; }
+
+  .chip { display:inline-flex; align-items:center; gap:6px; padding:4px 9px; border-radius:999px;
+          font-size:11px; font-weight:500; white-space:nowrap; }
+  .chip-measured { background:var(--accent-soft); color:var(--accent); }
+  .chip::before { content:""; width:5px; height:5px; border-radius:50%; background:currentColor; }
+
+  .meter { height:5px; background:var(--sunken); border-radius:3px; overflow:hidden; display:flex; }
+  .meter i { display:block; height:100%; background:var(--accent); border-radius:3px; }
+  .meter i.over { background:var(--warn); }
+
+  .split { display:flex; justify-content:space-between; align-items:baseline; gap:10px;
+           font-size:13px; color:var(--ink-2); }
+  .num { font-family:var(--mono); font-variant-numeric:tabular-nums; color:var(--ink); }
+  .num-warn { color:var(--warn); }
+
+  .row { display:flex; align-items:center; gap:12px; }
+  .row-body { flex:1; min-width:0; display:flex; flex-direction:column; gap:3px; }
+  .row-title { font-size:14px; font-weight:500; }
+  .row-sub { font-size:12px; color:var(--ink-3); }
+  .row-sub .num { color:var(--ink-2); }
+  .glyph { flex:none; width:34px; height:34px; border-radius:9px; background:var(--sunken);
+           display:grid; place-items:center; color:var(--ink-2); }
+  .glyph svg { width:17px; height:17px; }
+
+  button { font:inherit; color:inherit; border:0; background:none; cursor:pointer; }
+  .pill { flex:none; border:1px solid var(--line); background:var(--surface); color:var(--ink);
+          border-radius:999px; padding:6px 13px; font-size:13px; font-weight:500;
+          transition:background .14s ease,border-color .14s ease,color .14s ease; }
+  .pill:hover { background:var(--sunken); border-color:var(--ink-3); }
+  .pill-mono { font-family:var(--mono); font-size:12px; }
+  .pill-accent { border-color:var(--accent); color:var(--accent); }
+  .pill-accent:hover { background:var(--accent-soft); border-color:var(--accent); }
+  .quick { display:flex; gap:7px; flex-wrap:wrap; }
+  .quick.four { gap:6px; }
+  .quick.four .pill { padding:6px 9px; flex:1; text-align:center; }
+
+  /* ---- food: intake grouped by meal ---- */
+  .ibar { position:relative; height:32px; border-radius:9px; background:var(--sunken);
+          overflow:hidden; display:flex; }
+  .ibar .mseg { height:100%; display:flex; align-items:center; padding:0 8px; overflow:hidden;
+                background:var(--accent); color:var(--on-accent); font-size:10.5px; font-weight:600;
+                white-space:nowrap; letter-spacing:.01em; transition:width .3s ease;
+                box-shadow:inset -1px 0 0 var(--surface); }
+  .ibar .mseg.rest { background:transparent; color:var(--ink-3); font-weight:500;
+                     box-shadow:none; font-family:var(--mono); }
+  .ibar .mseg.over { background:var(--warn); }
+  .ibar .tick { position:absolute; top:0; bottom:0; width:2px; background:var(--ink); opacity:.65; }
+  .ibar-key { display:flex; gap:12px; font-size:11px; color:var(--ink-3); flex-wrap:wrap; }
+  .ibar-key b { color:var(--ink-2); font-family:var(--mono); font-weight:500;
+                font-variant-numeric:tabular-nums; }
+  .ibar-key .warnk { color:var(--warn); }
+
+  /* projection shown while choosing a quantity */
+  .proj { display:flex; flex-direction:column; gap:8px; background:var(--sunken);
+          border-radius:12px; padding:12px 13px; }
+  .projbar { position:relative; height:8px; border-radius:4px; background:var(--surface); display:flex; overflow:hidden; }
+  .projbar i { height:100%; display:block; }
+  .projbar .now { background:var(--accent); opacity:.45; }
+  .projbar .plus { background:var(--accent); }
+  .projbar .plus.over { background:var(--warn); }
+
+  /* ---- water: animated fill ---- */
+  /* The wave is the fill indicator and nothing else. Text used to sit on top of it,
+     which meant its background changed with the user's intake — pale mint when empty,
+     saturated teal when full — so no single ink colour stayed legible. The readout now
+     lives on solid card surface where contrast is fixed in both themes. */
+  .water-top { position:relative; flex:none; height:76px; min-height:76px; background:var(--sunken); }
+  .water-top canvas { display:block; width:100%; height:100%; }
+  .water-read { display:flex; align-items:baseline; gap:9px; flex-wrap:wrap; }
+  .water-read b { font-family:var(--mono); font-size:30px; font-weight:500; letter-spacing:-.03em;
+                  line-height:1; font-variant-numeric:tabular-nums; color:var(--ink); }
+  .water-read span { font-size:12.5px; color:var(--ink-2); }
+  .water-read em { font-style:normal; color:var(--accent); font-family:var(--mono); font-size:12px; }
+
+  .delta { display:flex; align-items:baseline; gap:9px; flex-wrap:wrap; }
+  .delta b { font-family:var(--mono); font-size:22px; font-weight:500; letter-spacing:-.025em;
+             font-variant-numeric:tabular-nums; }
+  .delta span { font-size:12px; color:var(--ink-2); }
+  .delta.down b { color:var(--accent); }
+  .delta.up b { color:var(--warn); }
+
+  .chart { width:100%; height:92px; display:block; overflow:visible; }
+  .chart .grid { stroke:var(--line); stroke-width:1; }
+  .chart .dot { fill:var(--ink-3); opacity:.42; }
+  .chart .trend { fill:none; stroke:var(--accent); stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+  .chart .cap { fill:var(--accent); }
+  .chart .capring { fill:none; stroke:var(--accent); stroke-width:1.5; opacity:.3; }
+
+  /* ---- adherence timeline ---- */
+  .tl { width:100%; display:block; overflow:visible; }
+  .tl .gridv { stroke:var(--line); stroke-width:1; }
+  .tl .rowline { stroke:var(--line); stroke-width:1; }
+  .tl .rowline.yest { opacity:.55; }
+  .tl .hour { fill:var(--ink-3); font-family:var(--mono); font-size:8px; }
+  .tl .rowlab { fill:var(--ink-2); font-family:var(--mono); font-size:8px; letter-spacing:.09em; }
+  .tl .daylab { fill:var(--ink-3); font-family:var(--mono); font-size:6.5px; letter-spacing:.08em; }
+  .tl .done { fill:var(--accent); }
+  .tl .missed { fill:none; stroke:var(--warn); stroke-width:1.7; }
+  .tl .ahead { fill:var(--ink-3); opacity:.3; }
+  .tl .done-y { fill:var(--accent); opacity:.45; }
+  .tl .missed-y { fill:none; stroke:var(--warn); stroke-width:1.3; opacity:.5; }
+  .tl .nowline { stroke:var(--ink); stroke-width:1; opacity:.35; stroke-dasharray:2 2; }
+
+  .adh-head { display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
+  .adh-nums { font-size:11.5px; color:var(--ink-2); white-space:nowrap; }
+  .legend { display:flex; align-items:center; gap:12px; font-size:10.5px; color:var(--ink-3); flex-wrap:wrap; }
+  .legend span { display:inline-flex; align-items:center; gap:5px; }
+  .legend .k { width:8px; height:8px; border-radius:50%; flex:none; }
+  .legend .k.done { background:var(--accent); }
+  .legend .k.missed { border:1.5px solid var(--warn); }
+  .legend .k.ahead { background:var(--ink-3); opacity:.3; }
+  .legend .miss-n { margin-left:auto; color:var(--warn); font-family:var(--mono); }
+
+  .notice { display:flex; gap:9px; font-size:12.5px; line-height:1.5; color:var(--ink-2);
+            background:var(--sunken); border-radius:10px; padding:11px 13px; text-align:left; width:100%; }
+  .notice.warn { background:var(--warn-soft); color:var(--warn); }
+  .notice.accent { background:var(--accent-soft); color:var(--accent); }
+  .notice svg { flex:none; width:15px; height:15px; margin-top:1px; }
+
+  /* ---- routines ---- */
+  .routine { background:var(--surface); border:1px solid var(--line); border-radius:var(--r);
+             padding:4px 15px 14px; display:flex; flex-direction:column; gap:11px; }
+  .routine.paused { background:var(--sunken); border-style:dashed; }
+  .routine.paused .r-head { opacity:.55; }
+  .routine.overdue { border-color:var(--warn); }
+  .r-head { display:flex; align-items:center; gap:11px; width:100%; text-align:left;
+            padding:12px 0 2px; border-radius:8px; }
+  .r-head:hover .r-name { color:var(--accent); }
+  .r-name { font-size:14.5px; font-weight:600; letter-spacing:-.005em; transition:color .14s ease; }
+  .r-when { font-family:var(--mono); font-size:11.5px; color:var(--ink-2); }
+  .chev { flex:none; color:var(--ink-3); width:16px; height:16px; }
+  .today-line { display:flex; align-items:center; gap:10px; }
+  .pips { display:inline-flex; gap:4px; flex:none; }
+  .pips i { width:8px; height:8px; border-radius:50%; display:block; background:var(--accent); }
+  .pips i.p-miss { background:transparent; border:1.5px solid var(--warn); }
+  .pips i.p-ahead { background:var(--ink-3); opacity:.28; }
+  .today-n { font-size:12px; color:var(--ink-2); }
+  .today-n b { font-family:var(--mono); color:var(--ink); }
+  .today-n.warn { color:var(--warn); }
+  .today-n.muted { color:var(--ink-3); }
+  .dayline { display:flex; align-items:center; gap:10px; }
+  .dayline .meter { flex:1; }
+  .dayline span { font-family:var(--mono); font-size:10.5px; color:var(--ink-3); white-space:nowrap; }
+
+  .r-acts { display:flex; gap:7px; align-items:center; }
+  .r-acts .pill { padding:6px 12px; font-size:12.5px; }
+  .act-done { border-color:var(--accent); color:var(--accent); flex:1; }
+  .act-done[data-state="done"] { background:var(--accent-soft); }
+  .act-due { border-color:var(--warn); color:var(--warn); }
+
+  .stagepick { display:flex; flex-direction:column; gap:8px; align-items:flex-start;
+               padding:14px 16px; border:1px dashed var(--line); border-radius:var(--r); }
+  .stagepick .seg { width:100%; max-width:520px; }
+
+  .welcome { gap:14px; }
+  .welcome h3 { margin:0; font-size:19px; line-height:1.25; letter-spacing:-.015em;
+                font-weight:600; text-wrap:balance; }
+  .steps { margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:9px; }
+  .steps li { font-size:13px; color:var(--ink-2); line-height:1.5; padding-left:0; }
+  .steps b { display:block; font-family:var(--mono); font-size:9.5px; letter-spacing:.13em;
+             text-transform:uppercase; color:var(--accent); margin-bottom:2px; font-weight:500; }
+
+  .meter .mark { position:absolute; top:-2px; bottom:-2px; width:2px;
+                 background:var(--ink); opacity:.45; border-radius:1px; }
+
+  .starter { display:flex; flex-direction:column; gap:12px; padding:16px;
+             border:1px dashed var(--line); border-radius:var(--r); }
+  .starter p { margin:0; font-size:13px; color:var(--ink-2); line-height:1.5; }
+
+  .empty { text-align:center; color:var(--ink-3); font-size:13px; padding:26px 12px;
+           border:1px dashed var(--line); border-radius:var(--r); }
+  .add { width:100%; background:var(--accent); color:var(--on-accent); border-radius:12px;
+         padding:13px; font-size:14.5px; font-weight:600; transition:filter .14s ease; }
+  .add:hover { filter:brightness(1.08); }
+  .add.ghost { background:var(--surface); color:var(--ink); border:1px solid var(--line); }
+  .add.ghost:hover { background:var(--sunken); filter:none; }
+  .actions-2 { display:flex; gap:9px; }
+  .actions-2 > * { flex:1; }
+
+  .banner { display:flex; align-items:center; gap:10px; background:var(--warn-soft);
+            color:var(--warn); border-radius:12px; padding:12px 13px; font-size:13px; }
+  .banner svg { flex:none; width:16px; height:16px; }
+  .banner .spacer { flex:1; }
+  .banner button { font-size:13px; font-weight:600; text-decoration:underline; white-space:nowrap; }
+
+  .tabbar { flex:none; display:flex; border-top:1px solid var(--line);
+            background:var(--surface); padding:7px 12px 16px; }
+  .tab { flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; padding:7px 0;
+         color:var(--ink-3); font-size:11px; font-weight:500; border-radius:10px; transition:color .14s ease; }
+  .tab svg { width:20px; height:20px; }
+  .tab[aria-selected="true"] { color:var(--accent); }
+  .tab:hover { color:var(--ink); }
+  .tab[aria-selected="true"]:hover { color:var(--accent); }
+
+  .sheet-scrim { position:absolute; inset:0; background:rgba(6,14,12,.34); opacity:0;
+                 pointer-events:none; transition:opacity .22s ease; z-index:5; }
+  .sheet-scrim[data-open="true"] { opacity:1; pointer-events:auto; }
+  .sheet { position:absolute; left:0; right:0; bottom:0; background:var(--surface);
+           border-top-left-radius:20px; border-top-right-radius:20px; border-top:1px solid var(--line);
+           padding:8px 18px 20px; transform:translateY(102%);
+           transition:transform .28s cubic-bezier(.32,.72,.28,1); z-index:6; max-height:90%;
+           overflow-y:auto; display:flex; flex-direction:column; gap:15px; }
+  .sheet[data-open="true"] { transform:translateY(0); }
+  .grabber { width:34px; height:4px; border-radius:2px; background:var(--line); margin:4px auto 2px; }
+
+  .field { display:flex; flex-direction:column; gap:8px; }
+  .seg { display:flex; gap:6px; flex-wrap:wrap; }
+  .seg button { flex:1; min-width:66px; border:1px solid var(--line); border-radius:10px; padding:9px 6px;
+                font-size:13px; font-weight:500; color:var(--ink-2); transition:all .14s ease; }
+  .seg button[aria-pressed="true"] { border-color:var(--accent); color:var(--accent); background:var(--accent-soft); }
+  .seg.compact { gap:5px; }
+  .seg.compact button { padding:5px 4px; font-size:12px; min-width:0; border-radius:8px; }
+  .daybtns { display:flex; gap:5px; }
+  .daybtns button { flex:1; border:1px solid var(--line); border-radius:9px; padding:8px 0;
+                    font-family:var(--mono); font-size:11px; color:var(--ink-3); transition:all .14s ease; }
+  .daybtns button[aria-pressed="true"] { border-color:var(--accent); color:var(--accent); background:var(--accent-soft); }
+
+  .times { display:flex; flex-direction:column; gap:7px; }
+  .time-row { display:flex; gap:8px; align-items:center; }
+  .time-row input { flex:1; }
+  .t-del { flex:none; width:38px; height:38px; border-radius:10px; border:1px solid var(--line);
+           color:var(--ink-3); display:grid; place-items:center; transition:all .14s ease; }
+  .t-del:hover { border-color:var(--warn); color:var(--warn); }
+  .t-del svg { width:15px; height:15px; }
+  .t-add { border:1px dashed var(--line); border-radius:10px; padding:10px; font-size:13px;
+           font-weight:500; color:var(--accent); transition:background .14s ease; }
+  .t-add:hover { background:var(--accent-soft); }
+
+  input[type="text"], input[type="time"], input[type="number"], input[type="search"] {
+    font:inherit; font-size:14px; width:100%; background:var(--sunken); color:var(--ink);
+    border:1px solid var(--line); border-radius:10px; padding:10px 12px; }
+  input[type="time"], input[type="number"] { font-family:var(--mono); }
+  .inline-2 { display:flex; gap:9px; }
+  .inline-2 > * { flex:1; }
+  .suffix { display:grid; place-items:center; font-size:13px; color:var(--ink-3); }
+
+  /* ---- food picker ---- */
+  .flist { display:flex; flex-direction:column; gap:2px; max-height:264px; overflow-y:auto; margin:0 -4px; }
+  .fitem { display:flex; align-items:center; gap:10px; padding:9px 10px; border-radius:10px;
+           text-align:left; width:100%; transition:background .12s ease; }
+  .fitem:hover { background:var(--sunken); }
+  .fitem[aria-pressed="true"] { background:var(--accent-soft); }
+  .fitem .fname { flex:1; min-width:0; font-size:13.5px; }
+  .fitem .funit { font-size:11.5px; color:var(--ink-3); }
+  .fitem .fkcal { font-family:var(--mono); font-size:12.5px; color:var(--ink-2); font-variant-numeric:tabular-nums; }
+
+  .stepper { display:flex; align-items:center; gap:12px; background:var(--sunken);
+             border-radius:12px; padding:10px 12px; }
+  .stepper .qty { flex:1; text-align:center; }
+  .stepper .qty b { font-family:var(--mono); font-size:20px; font-weight:500; }
+  .stepper .qty span { display:block; font-size:11.5px; color:var(--ink-3); }
+  .stepper button { width:38px; height:38px; border-radius:10px; border:1px solid var(--line);
+                    background:var(--surface); font-size:18px; line-height:1; color:var(--ink); }
+  .stepper button:hover { border-color:var(--accent); color:var(--accent); }
+
+  .preview { background:var(--sunken); border-radius:12px; padding:12px 13px;
+             display:flex; flex-direction:column; gap:4px; }
+  .preview-app { font-family:var(--mono); font-size:10px; letter-spacing:.1em;
+                 text-transform:uppercase; color:var(--ink-3); }
+  .preview-title { font-size:13.5px; font-weight:600; }
+  .preview-body { font-size:13px; color:var(--ink-2); }
+  .load { display:flex; gap:8px; align-items:flex-start; font-size:12.5px; line-height:1.5;
+          color:var(--ink-2); }
+  .load svg { flex:none; width:14px; height:14px; margin-top:2px; }
+  .load.heavy { color:var(--warn); background:var(--warn-soft); border-radius:10px; padding:10px 11px; }
+  .load.ok { color:var(--accent); background:var(--accent-soft); border-radius:10px; padding:10px 11px; }
+  .load .num { color:inherit; font-weight:600; }
+  .del-link { color:var(--warn); font-size:13px; font-weight:500; padding:6px 0; text-align:center; }
+  .del-link:hover { text-decoration:underline; }
+  .hint { font-size:12px; color:var(--ink-3); }
+
+  /* ---- lock screen ---- */
+  .notif-demo { display:flex; flex-wrap:wrap; gap:32px; align-items:center;
+                padding:30px; background:var(--shell); border-radius:20px; }
+  .lock { width:340px; flex:none; background:linear-gradient(168deg,#16302A 0%,#0B1917 100%);
+          border-radius:22px; padding:26px 16px 18px; display:flex; flex-direction:column; gap:14px;
+          border:1px solid rgba(255,255,255,.07); }
+  .lock-time { text-align:center; color:rgba(255,255,255,.94); }
+  .lock-time b { display:block; font-family:var(--mono); font-size:44px; font-weight:400;
+                 letter-spacing:-.03em; line-height:1; }
+  .lock-time span { font-size:12.5px; color:rgba(255,255,255,.52); }
+  .toast { background:rgba(255,255,255,.11); border:1px solid rgba(255,255,255,.09); border-radius:15px;
+           padding:12px 13px; display:flex; flex-direction:column; gap:9px; transition:opacity .2s ease; }
+  .toast-head { display:flex; align-items:center; gap:8px; }
+  .toast-app { font-family:var(--mono); font-size:9.5px; letter-spacing:.12em;
+               text-transform:uppercase; color:rgba(255,255,255,.5); }
+  .toast-mark { width:15px; height:15px; border-radius:4px; background:#46C0A4; display:grid; place-items:center; }
+  .toast-mark svg { width:9px; height:9px; }
+  .toast h4 { margin:0; font-size:14px; color:#fff; font-weight:600; }
+  .toast p { margin:0; font-size:12.5px; color:rgba(255,255,255,.66); line-height:1.42; }
+  .toast-acts { display:flex; gap:7px; margin-top:2px; }
+  .toast-acts button { flex:1; border-radius:9px; padding:8px; font-size:12.5px; font-weight:600;
+                       background:rgba(255,255,255,.13); color:#fff; transition:background .14s ease; }
+  .toast-acts button:hover { background:rgba(255,255,255,.22); }
+  .toast-acts button.primary { background:#46C0A4; color:#08110F; }
+  .toast[data-done="true"] { opacity:.48; }
+  .notif-copy { flex:1; min-width:260px; display:flex; flex-direction:column; gap:12px; }
+  .notif-copy h3 { margin:0; font-size:20px; letter-spacing:-.015em; }
+  .notif-copy p { margin:0; color:var(--ink-2); font-size:14.5px; }
+
+  .notes { display:flex; flex-direction:column; gap:20px; }
+  .notes h3 { margin:0; font-size:20px; letter-spacing:-.015em; }
+  .note-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(272px,1fr)); gap:16px; }
+  .note { border:1px solid var(--line); border-radius:var(--r); padding:17px; background:var(--surface);
+          display:flex; flex-direction:column; gap:8px; }
+  .note h4 { margin:0; font-size:14.5px; font-weight:600; }
+  .note p { margin:0; font-size:13.5px; color:var(--ink-2); line-height:1.55; }
+  .note .label { color:var(--accent); }
+  .note.flag .label { color:var(--warn); }
+
+  .head-acts { display:flex; align-items:center; gap:6px; }
+  .iconbtn { display:grid; place-items:center; width:28px; height:28px; border-radius:999px;
+             border:1px solid var(--line); color:var(--ink-3); transition:all .14s ease; }
+  .iconbtn svg { width:14px; height:14px; }
+  .iconbtn:hover { color:var(--accent); border-color:var(--accent); background:var(--accent-soft); }
+
+  .fgroup { font-family:var(--mono); font-size:9.5px; letter-spacing:.13em; text-transform:uppercase;
+            color:var(--ink-3); padding:12px 10px 5px; border-top:1px solid var(--line);
+            margin-top:4px; position:sticky; top:0; background:var(--surface); }
+  .flist > .fgroup:first-child { border-top:0; margin-top:0; padding-top:2px; }
+
+  /* One-time reveal on open. Keyed off .intro, which is dropped after the first paint,
+     so ordinary state changes re-render without any animation at all — a chart that
+     redraws itself every time you tap a button is noise, not polish. */
+  @keyframes tl-draw { from { stroke-dashoffset:1; } to { stroke-dashoffset:0; } }
+  @keyframes fade-up { from { opacity:0; transform:translateY(5px); } to { opacity:1; transform:none; } }
+  @keyframes pop { from { opacity:0; transform:scale(.4); } to { opacity:1; transform:scale(1); } }
+  @keyframes grow-x { from { transform:scaleX(0); } to { transform:scaleX(1); } }
+
+  .intro .chart .trend { stroke-dasharray:1; animation:tl-draw .9s ease-out both; }
+  .intro .chart .dot { animation:fade-up .5s ease-out both; animation-delay:.35s; }
+  .intro .chart .cap, .intro .chart .capring { animation:pop .4s ease-out both; animation-delay:.8s; }
+  .intro .tl circle { animation:pop .32s ease-out both; }
+  .intro .ibar .mseg, .intro .meter i, .intro .hbar i, .intro .projbar i {
+    transform-origin:left center; animation:grow-x .6s cubic-bezier(.3,.8,.3,1) both; }
+  .intro .pips i { animation:pop .3s ease-out both; }
+  .intro .card { animation:fade-up .45s ease-out both; }
+  .intro .viewport > *:nth-child(2) { animation-delay:.04s; }
+  .intro .viewport > *:nth-child(3) { animation-delay:.09s; }
+  .intro .viewport > *:nth-child(4) { animation-delay:.14s; }
+  .intro .viewport > *:nth-child(5) { animation-delay:.19s; }
+
+  :focus-visible { outline:2px solid var(--accent); outline-offset:2px; border-radius:4px; }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition-duration:.01ms !important; animation:none !important; }
+  }
+  @media (max-width:900px) {
+    .page { padding:36px 16px 60px; gap:44px; }
+    .stage { gap:32px; justify-content:center; }
+    .screen { width:min(372px,92vw); }
+    .notif-demo { padding:20px; }
+    .lock { width:min(340px,100%); }
+  }
+</style>
+
+<div class="page">
+
+  <header class="masthead">
+    <p class="eyebrow">TrueBurn · interactive prototype</p>
+    <h1>Log a meal in three taps. Log a glass of water in none.</h1>
+    <p class="lede">
+      <b>Today</b> is the daily loop. <b>Routines</b> is the reminders you set once and mostly forget.
+      Water fills as you drink it, food shows the shape of your day meal by meal, and the adherence
+      timeline shows <em>when</em> reminders slip rather than just how many. Everything is live.
+    </p>
+  </header>
+
+  <div class="stagepick">
+    <span class="label">Prototype state</span>
+    <div class="seg compact" id="stagepick">
+      <button data-stage="day1">Day 1 — nothing logged</button>
+      <button data-stage="building">Day 12 — building up</button>
+      <button data-stage="measured" aria-pressed="true">Day 30 — measuring</button>
+    </div>
+    <span class="hint">Not part of the app. The three states a real user passes through.</span>
+  </div>
+
+  <div class="stage" id="stage"></div>
+
+  <section class="notif-demo">
+    <div class="lock">
+      <div class="lock-time"><b>11:00</b><span>Monday 17 August</span></div>
+      <div class="toast" id="toast-water" data-done="false">
+        <div class="toast-head"><span class="toast-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#08110F" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><span class="toast-app">TrueBurn</span></div>
+        <h4>Drink water</h4>
+        <p id="water-body">The 11:00 bottle. Marking done logs 500 ml for you.</p>
+        <div class="toast-acts">
+          <button class="primary" id="water-done">Done</button>
+          <button id="water-snooze">In 30 min</button>
+          <button id="water-skip">Skip</button>
+        </div>
+      </div>
+      <div class="toast" id="toast-gym" data-done="false">
+        <div class="toast-head"><span class="toast-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#08110F" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><span class="toast-app">TrueBurn</span></div>
+        <h4>Gym — lower body</h4>
+        <p id="gym-body">Session 32 of 56. Mondays, Wednesdays and Fridays at 18:30.</p>
+        <div class="toast-acts">
+          <button class="primary" id="gym-done">Done</button>
+          <button id="gym-snooze">In 30 min</button>
+          <button id="gym-skip">Skip</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="notif-copy">
+      <p class="eyebrow">Done does the work</p>
+      <h3>One tap, from the lock screen, and the log updates itself.</h3>
+      <p>Tick the water reminder and 500 ml lands on Today — watch the wave rise on the left. No second entry, no opening the app.</p>
+      <p>Tick the gym reminder and the progress bar moves and <b>nothing else does</b>. No calories are credited, ever — that would double-count against measured expenditure.</p>
+      <p><b>Skip</b> is as prominent as <b>Done</b>. A reminder you can dismiss honestly is one you keep.</p>
+    </div>
+  </section>
+
+  <section class="notes">
+    <h3>What this prototype decides</h3>
+    <div class="note-grid">
+      <div class="note">
+        <p class="label">Information, not decoration</p>
+        <h4>The adherence view is a timeline, not two bars</h4>
+        <p>
+          Counts tell you that you missed two reminders. A timeline tells you that you always miss
+          the 15:00 one — which is the finding you can act on. Yesterday and today share an axis, so
+          the pattern reads down the column.
+        </p>
+      </div>
+      <div class="note">
+        <p class="label">Fewer entries</p>
+        <h4>Each reminder is ticked individually</h4>
+        <p>
+          Completion is per reminder, not per day, so ticking three of six water reminders logs
+          750 ml — not all or nothing. It also means the timeline can show exactly which ones landed.
+        </p>
+      </div>
+      <div class="note">
+        <p class="label">Three taps</p>
+        <h4>Food opens on recents, not on search</h4>
+        <p>
+          People eat a small repertoire, so the list you already used is the fastest path. Quantity
+          scales the calories live. Custom foods are saved as reusable items — §5.1 requires it,
+          because re-guessing a portion each time biases the expenditure measurement downward.
+        </p>
+      </div>
+      <div class="note flag">
+        <p class="label">Overrides spec §7</p>
+        <h4>Your own reminders escape the 4/day cap</h4>
+        <p>
+          The cap exists for pings you did not ask for. A routine you built is not one. The sheet
+          discloses the true cost before you commit, and says plainly when a schedule is dense
+          enough that people usually mute it.
+        </p>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var I = {
+    scale:'<path d="M4 20h16M6 20V9a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v11M12 7v3"/>',
+    food:'<path d="M6 3v8a3 3 0 0 0 6 0V3M9 11v10M17 3c-1.5 1.5-2 3-2 5s.5 3 2 3 2-1 2-3-.5-3.5-2-5zM17 11v10"/>',
+    water:'<path d="M12 3s6 6.4 6 10.5A6 6 0 0 1 6 13.5C6 9.4 12 3 12 3z"/>',
+    gym:'<path d="M4 9v6M8 6v12M16 6v12M20 9v6M8 12h8"/>',
+    bell:'<path d="M18 8a6 6 0 1 0-12 0c0 6-2 7-2 7h16s-2-1-2-7M13.7 20a2 2 0 0 1-3.4 0"/>',
+    today:'<path d="M4 5h16v15H4zM4 10h16M9 3v4M15 3v4"/>',
+    info:'<circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v5h1"/>',
+    chev:'<path d="m9 5 7 7-7 7"/>', x:'<path d="M6 6l12 12M18 6L6 18"/>',
+    pause:'<path d="M8 5v14M16 5v14"/>', plus:'<path d="M12 5v14M5 12h14"/>',
+    back:'<path d="m15 19-7-7 7-7"/>', copy:'<path d="M9 9h10v10H9zM5 15V5h10"/>',
+    hist:'<path d="M3.2 10a9 9 0 1 1 .3 4"/><path d="M2 5v5h5"/><path d="M12 8v4.5l3 1.8"/>',
+    gear:'<path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3"/>'+
+         '<path d="M14 2v4M8 10v4M16 18v4"/>'
+  };
+  function svg(d,w){ return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="'+
+    (w||1.7)+'" stroke-linecap="round" stroke-linejoin="round">'+d+'</svg>'; }
+
+  var DAYS=["S","M","T","W","T","F","S"];
+  var DAY_FULL=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+  var ALL=[0,1,2,3,4,5,6];
+  var NOW=13*60+20, TODAY_DOW=1, YEST_DOW=0;
+
+  // ---- seed food list. Natural portions, never grams — §5.2. -------------
+  var FOODS=[
+    {n:"Roti / chapati",u:"1 roti",k:120},{n:"Paratha, plain",u:"1 paratha",k:210},
+    {n:"Naan",u:"1 naan",k:260},{n:"Rice, cooked",u:"1 katori",k:205},
+    {n:"Jeera rice",u:"1 katori",k:240},{n:"Veg pulao",u:"1 katori",k:230},
+    {n:"Chicken biryani",u:"1 plate",k:490},{n:"Bread slice",u:"1 slice",k:75},
+    {n:"Poha",u:"1 plate",k:250},{n:"Upma",u:"1 plate",k:270},
+    {n:"Idli",u:"1 idli",k:58},{n:"Dosa, plain",u:"1 dosa",k:165},
+    {n:"Masala dosa",u:"1 dosa",k:290},{n:"Uttapam",u:"1 uttapam",k:230},
+    {n:"Medu vada",u:"1 vada",k:145},{n:"Oats, cooked",u:"1 bowl",k:160},
+    {n:"Muesli with milk",u:"1 bowl",k:230},{n:"Cornflakes with milk",u:"1 bowl",k:210},
+    {n:"Dal tadka",u:"1 katori",k:180},{n:"Dal makhani",u:"1 katori",k:280},
+    {n:"Rajma",u:"1 katori",k:215},{n:"Chole",u:"1 katori",k:240},
+    {n:"Sambar",u:"1 katori",k:140},{n:"Paneer butter masala",u:"1 katori",k:330},
+    {n:"Palak paneer",u:"1 katori",k:275},{n:"Mixed veg sabzi",u:"1 katori",k:150},
+    {n:"Aloo sabzi",u:"1 katori",k:190},{n:"Bhindi masala",u:"1 katori",k:165},
+    {n:"Chicken curry",u:"1 katori",k:290},{n:"Egg curry",u:"1 katori",k:240},
+    {n:"Fish curry",u:"1 katori",k:250},{n:"Mutton curry",u:"1 katori",k:350},
+    {n:"Egg, boiled",u:"1 egg",k:78},{n:"Omelette, 2 egg",u:"1 omelette",k:220},
+    {n:"Chicken breast, grilled",u:"1 piece",k:165},{n:"Paneer, raw",u:"50 g",k:145},
+    {n:"Tofu",u:"100 g",k:145},{n:"Curd / dahi",u:"1 katori",k:100},
+    {n:"Greek yogurt",u:"1 cup",k:130},{n:"Whey protein",u:"1 scoop",k:120},
+    {n:"Peanuts",u:"1 handful",k:170},{n:"Almonds",u:"10 almonds",k:70},
+    {n:"Samosa",u:"1 samosa",k:260},{n:"Pakora",u:"4 pieces",k:220},
+    {n:"Bhel puri",u:"1 plate",k:210},{n:"Pav bhaji",u:"1 plate",k:400},
+    {n:"Vada pav",u:"1 piece",k:290},{n:"Veg sandwich",u:"1 sandwich",k:250},
+    {n:"Maggi noodles",u:"1 pack",k:310},{n:"Marie biscuits",u:"4 biscuits",k:95},
+    {n:"Potato chips",u:"1 small pack",k:160},{n:"Dark chocolate",u:"2 squares",k:110},
+    {n:"Tea with milk & sugar",u:"1 cup",k:90},{n:"Coffee with milk",u:"1 cup",k:80},
+    {n:"Black coffee",u:"1 cup",k:5},{n:"Milk, full fat",u:"1 glass",k:150},
+    {n:"Buttermilk",u:"1 glass",k:60},{n:"Sweet lassi",u:"1 glass",k:260},
+    {n:"Orange juice",u:"1 glass",k:110},{n:"Cola",u:"1 can",k:140},
+    {n:"Beer",u:"1 bottle",k:145},{n:"Banana",u:"1 banana",k:105},
+    {n:"Apple",u:"1 apple",k:95},{n:"Orange",u:"1 orange",k:62},
+    {n:"Mango",u:"1 mango",k:200},{n:"Papaya",u:"1 bowl",k:60},
+    {n:"Green salad",u:"1 bowl",k:45},{n:"Ghee",u:"1 tsp",k:45},
+    {n:"Cooking oil",u:"1 tbsp",k:120},{n:"Butter",u:"1 tsp",k:36},
+    {n:"Sugar",u:"1 tsp",k:16}
+  ];
+
+  var TYPES={
+    water:{label:"Water",icon:I.water,tpl:{name:"Drink water",message:"Time for a glass.",
+      times:["09:00","11:00","13:00","15:00","17:00","19:00"],days:ALL,amountMl:500}},
+    food:{label:"Food",icon:I.food,tpl:{name:"Log your meals",message:"Log what you ate. Takes 20 seconds.",
+      times:["08:30","13:00","17:00","20:30"],days:ALL,amountMl:0}},
+    gym:{label:"Gym",icon:I.gym,tpl:{name:"Gym session",message:"Session time.",
+      times:["18:30"],days:[1,3,5],amountMl:0}},
+    custom:{label:"Custom",icon:I.bell,tpl:{name:"",message:"",times:["09:00"],days:ALL,amountMl:0}}
+  };
+
+  var TDEE=2560, KCAL_PER_KG=7700;
+
+  var state={
+    tab:{a:"today",b:"routines"},
+    sheet:null, sheetPhone:"b", draft:null, editingId:null,
+    histRange:7, histDay:null,
+    wRange:"month", wDraft:78.4, loggedToday:false,
+    profile:{heightCm:175,birthYear:1994,variant:"mifflin-male",activity:"light"},
+    goal:{kind:"lose",kgPerWeek:0.5},
+    weighAt:"07:30", quietFrom:"22:00", quietTo:"07:00",
+    armedWater:null, intro:true, theme:"auto", stage:"measured", profileSet:true,
+    food:{ pick:null, qty:1, q:"", custom:{name:"",kcal:""} },
+    pauseUntil:null,
+    entries:[ {n:"Poha",u:"1 plate",q:1,k:250,meal:"breakfast"},
+              {n:"Tea with milk & sugar",u:"1 cup",q:2,k:180,meal:"breakfast"},
+              {n:"Roti / chapati",u:"1 roti",q:3,k:360,meal:"lunch"},
+              {n:"Dal tadka",u:"1 katori",q:1,k:180,meal:"lunch"},
+              {n:"Curd / dahi",u:"1 katori",q:1,k:100,meal:"lunch"} ],
+    yesterdayEntries:[ {n:"Upma",u:"1 plate",q:1,k:270,meal:"breakfast"},
+                       {n:"Tea with milk & sugar",u:"1 cup",q:2,k:180,meal:"breakfast"},
+                       {n:"Rice, cooked",u:"1 katori",q:2,k:410,meal:"lunch"},
+                       {n:"Rajma",u:"1 katori",q:1,k:215,meal:"lunch"},
+                       {n:"Banana",u:"1 banana",q:1,k:105,meal:"snack"} ],
+    recents:["Roti / chapati","Tea with milk & sugar","Dal tadka","Curd / dahi","Poha"],
+    customFoods:[{n:"Amma's sambar",u:"1 katori",k:160}],
+    waterManualMl:400,
+    routines:[
+      {id:1,type:"water",name:"Drink water",message:"Time for a glass.",
+       times:["09:00","11:00","13:00","15:00","17:00","19:00"],days:ALL.slice(),amountMl:500,
+       totalDays:30,elapsed:12,active:true,done:["09:00","11:00"],doneY:["09:00","11:00","13:00","15:00","19:00"]},
+      {id:2,type:"gym",name:"Gym — lower body",message:"Session time.",
+       times:["18:30"],days:[1,3,5],amountMl:0,
+       totalDays:56,elapsed:31,active:true,done:[],doneY:[]},
+      {id:3,type:"food",name:"Log your meals",message:"Log what you ate. Takes 20 seconds.",
+       times:["08:30","13:00","17:00","20:30"],days:ALL.slice(),amountMl:0,
+       totalDays:21,elapsed:5,active:true,done:["08:30"],doneY:["08:30","13:00","20:30"]},
+      {id:4,type:"custom",name:"Stretch after sitting",message:"Stand up for two minutes.",
+       times:["11:00","16:00"],days:[1,2,3,4,5],amountMl:0,
+       totalDays:14,elapsed:14,active:false,done:[],doneY:[]}
+    ]
+  };
+  var nextId=5;
+
+  // ------------------------------------------------------------- helpers
+  function h(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+  function mins(t){ return parseInt(t.slice(0,2),10)*60+parseInt(t.slice(3,5),10); }
+
+  // 24h is the storage format; am/pm is what people read. Minutes are dropped when
+  // they are zero — "9 am" rather than "9:00 am" — because the clutter buys nothing.
+  function ampm(t){
+    var m=mins(t), hh=Math.floor(m/60), mm=m%60, ap=hh<12?"am":"pm", h12=hh%12||12;
+    return h12+(mm?":"+String(mm).padStart(2,"0"):"")+" "+ap;
+  }
+  function hourLab(hh){ return (hh%12||12)+(hh<12?"a":"p"); }
+
+  // Target follows the goal rather than sitting as a constant, so the settings sheet
+  // moves real numbers — including the §6 safety rules when they bind.
+  function goalDeficit(){
+    var g=state.goal;
+    if(g.kind==="maintain") return {kcal:0,capped:false};
+    var capped=g.kgPerWeek>1.0, rate=Math.min(1.0,g.kgPerWeek);
+    return {kcal:(g.kind==="lose"?1:-1)*rate*KCAL_PER_KG/7, capped:capped};
+  }
+  function intakeFloor(){ return state.profile.variant==="mifflin-female"?1200:1500; }
+  function targetInfo(){
+    var d=goalDeficit(), raw=Math.round(TDEE-d.kcal), floor=intakeFloor();
+    return {kcal:Math.max(floor,raw), rateCapped:d.capped, floored:raw<floor, floor:floor};
+  }
+  function targetKcal(){ return targetInfo().kcal; }
+  function clock(m){ m=((m%1440)+1440)%1440;
+    return String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0"); }
+  function dueOn(r,d){ return r.days.indexOf(d)>=0; }
+  function isPaused(){ return state.pauseUntil!==null; }
+  function pauseLabel(){ return state.pauseUntil===-1?"tomorrow morning":ampm(clock(state.pauseUntil)); }
+  function consumed(){ return state.entries.reduce(function(s,e){return s+e.k;},0); }
+  function waterMl(){
+    var fromR=state.routines.reduce(function(s,r){
+      return s + (r.type==="water"&&r.amountMl ? r.done.length*r.amountMl : 0); },0);
+    return state.waterManualMl+fromR;
+  }
+  function waterFromRoutines(){
+    return state.routines.reduce(function(s,r){
+      return s + (r.type==="water"&&r.amountMl ? r.done.length*r.amountMl : 0); },0);
+  }
+  // ~35 ml per kg, bounded — REQUIREMENTS §4.5. Derived rather than a fixed constant so
+  // the recommended zone tracks the user instead of a made-up number.
+  // "Auto" means removing the override entirely so prefers-color-scheme takes back
+  // over — not reading the device once and freezing that answer.
+  function applyTheme(){
+    var el=document&&document.documentElement;
+    if(!el||typeof el.setAttribute!=="function") return;
+    if(state.theme==="auto"){ if(el.removeAttribute) el.removeAttribute("data-theme"); }
+    else el.setAttribute("data-theme",state.theme);
+  }
+
+  // How much history exists in each stage. The engine's own thresholds (§4.2: three
+  // weigh-ins, 12-day minimum span, 28-day window) decide what the UI may claim.
+  var MEASURE_FROM=12, MEASURE_FULL=28;
+  function dataDays(){ return state.stage==="day1"?0:state.stage==="building"?12:N_DAYS; }
+  function hasWeight(){ return dataDays()>0; }
+  function trendReady(){ return dataDays()>=2; }
+  // Mirrors the engine's three modes (§4.4) rather than a single boolean. At exactly a
+  // 12-day span confidence is *zero* — measurement becomes possible, not trustworthy —
+  // so claiming "Measured" there would overstate what the app actually knows.
+  function tdeeMode(){
+    var d=dataDays();
+    return d<MEASURE_FROM?"formula":d<MEASURE_FULL?"blended":"measured";
+  }
+  function canMeasure(){ return tdeeMode()!=="formula"; }
+  function firstI(){ return Math.max(0,TODAY_I-dataDays()+1); }
+
+  function trendNow(){ return hasWeight()?series.trend[TODAY_I]:null; }
+  function waterTarget(){
+    var kg=trendNow();
+    if(kg===null) return 2500;           // sane default until a first weigh-in exists
+    return Math.round(Math.min(4000,Math.max(2000,35*kg))/50)*50;
+  }
+  // Times due today that have passed and were not ticked.
+  function missedTimes(r){
+    if(!r.active||isPaused()||!dueOn(r,TODAY_DOW)) return [];
+    return r.times.filter(function(t){ return mins(t)<NOW && r.done.indexOf(t)<0; });
+  }
+  function nextTime(r){
+    var pend=r.times.filter(function(t){ return r.done.indexOf(t)<0; });
+    if(!pend.length) return null;
+    var past=pend.filter(function(t){ return mins(t)<NOW; });
+    return past.length ? past[0] : pend[0];
+  }
+  function dayText(r){
+    if(r.days.length===7) return "every day";
+    if(r.days.length===5&&r.days.indexOf(0)<0&&r.days.indexOf(6)<0) return "weekdays";
+    if(r.days.length===2&&r.days.indexOf(0)>=0&&r.days.indexOf(6)>=0) return "weekends";
+    return r.days.map(function(d){return DAY_FULL[d].slice(0,3);}).join(" ");
+  }
+  function whenText(r){
+    if(r.times.length===1) return ampm(r.times[0])+" · "+dayText(r);
+    return r.times.length+" times a day · "+ampm(r.times[0])+"–"+
+      ampm(r.times[r.times.length-1])+" · "+dayText(r);
+  }
+
+  // ------------------------------------------------------------- weight chart
+  // A year of weigh-ins so Month / Quarter / Year are real windows rather than three
+  // views of the same month. Shaped with keyframes — quick early loss, a genuine
+  // plateau, then a slower decline — because a straight line would make the trend line
+  // look like a triviality when its whole job is surviving stretches like the plateau.
+  var N_DAYS=370, TODAY_I=N_DAYS-1, YEST_I=TODAY_I-1;
+
+  var series=(function(){
+    var KEY=[[0,88.0],[90,83.5],[180,82.8],[270,80.2],[369,78.4]];
+    function trueAt(d){
+      for(var i=1;i<KEY.length;i++){
+        if(d<=KEY[i][0]){
+          var a=KEY[i-1],b=KEY[i],f=(d-a[0])/(b[0]-a[0]);
+          return a[1]+(b[1]-a[1])*f;
+        }
+      }
+      return KEY[KEY.length-1][1];
+    }
+    var raw=[],trend=[],t=null,s=12345;
+    function rnd(){ s=(s*1103515245+12345)&0x7fffffff; return s/0x7fffffff; }
+    for(var i=0;i<N_DAYS;i++){
+      var kg=trueAt(i)+(rnd()-0.5)*1.05+Math.sin(i/9*Math.PI*2)*0.34;
+      raw.push(kg); t=t===null?kg:t+0.25*(kg-t); trend.push(t);
+    }
+    return {raw:raw,trend:trend};
+  })();
+
+  var RANGES=[{k:"month",label:"Month",d:30},
+              {k:"quarter",label:"Quarter",d:90},
+              {k:"year",label:"Year",d:365}];
+  function rangeDays(){
+    for(var i=0;i<RANGES.length;i++) if(RANGES[i].k===state.wRange) return RANGES[i].d;
+    return 30;
+  }
+
+  // ------------------------------------------------------------- history
+  //
+  // Intake is derived *from* the weight trend rather than invented alongside it, so the
+  // recorded days actually reconcile with the engine's own arithmetic. That lets the
+  // summary show predicted-versus-actual honestly instead of two unrelated numbers.
+  var MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  var DOW3=["SUN","MON","TUE","WED","THU","FRI","SAT"];
+  var BASE_MS=Date.UTC(2026,7,17);
+
+  function dayLabel(ago){
+    var d=new Date(BASE_MS-ago*86400000);
+    return DOW3[d.getUTCDay()]+" "+d.getUTCDate()+" "+MON[d.getUTCMonth()].toUpperCase();
+  }
+
+  var history=(function(){
+    var out=[], s=98765;
+    function rnd(){ s=(s*1103515245+12345)&0x7fffffff; return s/0x7fffffff; }
+    // series index 29 is today; walk backwards so out[0] is yesterday.
+    for(var ago=1;ago<=28;ago++){
+      var i=TODAY_I-ago;
+      // Losing weight means eating *below* expenditure, so a negative delta lowers
+      // intake. delta is already signed — add it, do not subtract.
+      var delta=series.trend[i]-series.trend[i-1];
+      var kcal=Math.round(Math.max(1450,Math.min(2650,TDEE+delta*KCAL_PER_KG+(rnd()-0.5)*180)));
+      var b=Math.round(kcal*(0.20+rnd()*0.06));
+      var l=Math.round(kcal*(0.31+rnd()*0.06));
+      var sn=Math.round(kcal*(0.11+rnd()*0.05));
+      out.push({ago:ago,label:dayLabel(ago),kcal:kcal,
+        meals:{breakfast:b,lunch:l,snack:sn,dinner:kcal-b-l-sn},
+        waterMl:1800+Math.round(rnd()*1500),
+        remDone:5+Math.round(rnd()*5), remDue:11,
+        trend:series.trend[i], raw:series.raw[i]});
+    }
+    return out;
+  })();
+
+  function summary(days){
+    var rows=history.slice(0,days);
+    var avgK=Math.round(rows.reduce(function(s,r){return s+r.kcal;},0)/rows.length);
+    var net=avgK-TDEE;
+    var predicted=net*rows.length/KCAL_PER_KG;
+    // `predicted` sums N daily deltas, so `actual` must span N intervals — that is
+    // N+1 trend points. Measuring between the newest and oldest *rows* spans only
+    // N-1 intervals and silently understates the real change.
+    var lastIdx=Math.max(0,YEST_I-rows.length);
+    var actual=series.trend[YEST_I]-series.trend[lastIdx];
+    var water=Math.round(rows.reduce(function(s,r){return s+r.waterMl;},0)/rows.length);
+    var rem=rows.reduce(function(s,r){return s+r.remDone;},0);
+    var remD=rows.reduce(function(s,r){return s+r.remDue;},0);
+    return {avgK:avgK,net:net,predicted:predicted,actual:actual,water:water,
+            rem:rem,remD:remD,days:rows.length};
+  }
+
+  function chart(){
+    var n=Math.min(rangeDays(),dataDays()), from=Math.max(firstI(),TODAY_I-n+1);
+    if(n<2) return "";
+    var raw=series.raw.slice(from,TODAY_I+1), tr=series.trend.slice(from,TODAY_I+1);
+    var last=raw.length-1;
+    var w=320,hg=92,pad=7;
+    // Scale to the trend, not the raw scatter: over a year the outliers would flatten
+    // the line into a straight edge and hide the shape entirely.
+    var span=tr.concat(n<=90?raw:[]);
+    var lo=Math.min.apply(null,span)-.25, hi=Math.max.apply(null,span)+.25;
+    var X=function(i){return pad+(i/last)*(w-pad*2);};
+    var Y=function(v){return pad+(1-(v-lo)/(hi-lo))*(hg-pad*2);};
+
+    var o='<svg class="chart" viewBox="0 0 '+w+' '+hg+'" preserveAspectRatio="none" aria-hidden="true">';
+    [.25,.5,.75].forEach(function(g){ var y=(pad+g*(hg-pad*2)).toFixed(1);
+      o+='<line class="grid" x1="0" y1="'+y+'" x2="'+w+'" y2="'+y+'"/>'; });
+
+    // Raw dots earn their place at a month, get smaller at a quarter, and are dropped
+    // at a year — 365 of them is texture, not information.
+    if(n<=90){
+      var r=n<=30?1.9:1.2;
+      raw.forEach(function(v,i){
+        o+='<circle class="dot" cx="'+X(i).toFixed(1)+'" cy="'+Y(v).toFixed(1)+'" r="'+r+'"/>'; });
+    }
+
+    o+='<path class="trend" pathLength="1" d="'+tr.map(function(v,i){
+      return (i?"L":"M")+X(i).toFixed(1)+" "+Y(v).toFixed(1); }).join(" ")+'"/>';
+    var lx=X(last).toFixed(1), ly=Y(tr[last]).toFixed(1);
+    return o+'<circle class="capring" cx="'+lx+'" cy="'+ly+'" r="5.4"/>'+
+      '<circle class="cap" cx="'+lx+'" cy="'+ly+'" r="3"/></svg>';
+  }
+
+  // The plain-language answer the range toggle exists to give.
+  function rangeDelta(){
+    var n=Math.min(rangeDays(),dataDays()), from=Math.max(firstI(),TODAY_I-n+1);
+    if(n<2) return null;
+    var d=series.trend[TODAY_I]-series.trend[from];
+    var weeks=(TODAY_I-from)/7;
+    return {kg:d, perWeek:weeks?d/weeks:0, start:series.trend[from], end:series.trend[TODAY_I],
+            days:TODAY_I-from};
+  }
+
+  // ------------------------------------------------------------- adherence timeline
+  //
+  // One row per routine, each with a thin yesterday row beneath it, all sharing a time
+  // axis. Merging every routine onto a single row — the earlier design — collided dots
+  // into blobs and made a missed marker unattributable: you could see that something
+  // lapsed at 17:00 but not what. Within one routine the times are distinct by
+  // definition, so nothing can overlap.
+  function timeline(){
+    var act=state.routines.filter(function(r){ return r.active; });
+    if(!act.length) return '<div class="empty">No active routines.</div>';
+
+    var W=320, L=54, R=8, TOP=4, ROW=30, AX=13;
+    var H=TOP+act.length*ROW+AX;
+    var FROM=6*60, TO=22*60+30;
+    var X=function(m){ return L+(m-FROM)/(TO-FROM)*(W-L-R); };
+
+    var o='<svg class="tl" viewBox="0 0 '+W+' '+H+'" role="img" '+
+      'aria-label="Each routine\'s reminders across the day, today above yesterday">';
+
+    [6,10,14,18,22].forEach(function(hh){
+      var x=X(hh*60).toFixed(1);
+      o+='<line class="gridv" x1="'+x+'" y1="'+TOP+'" x2="'+x+'" y2="'+(H-AX)+'"/>';
+      o+='<text class="hour" x="'+x+'" y="'+(H-2)+'" text-anchor="middle">'+hourLab(hh)+'</text>';
+    });
+
+    act.forEach(function(r,i){
+      var yT=TOP+i*ROW+11, yY=yT+11;
+      o+='<line class="rowline" x1="'+L+'" y1="'+yT+'" x2="'+(W-R)+'" y2="'+yT+'"/>';
+      o+='<line class="rowline yest" x1="'+L+'" y1="'+yY+'" x2="'+(W-R)+'" y2="'+yY+'"/>';
+      o+='<text class="rowlab" x="0" y="'+(yT+3)+'">'+
+        h(TYPES[r.type].label.toUpperCase())+'</text>';
+      o+='<text class="daylab" x="0" y="'+(yY+2.5)+'">YEST</text>';
+
+      if(dueOn(r,TODAY_DOW)) r.times.forEach(function(t){
+        var x=X(mins(t)).toFixed(1), done=r.done.indexOf(t)>=0;
+        if(done) o+='<circle class="done" cx="'+x+'" cy="'+yT+'" r="4"/>';
+        else if(mins(t)<NOW && !isPaused()) o+='<circle class="missed" cx="'+x+'" cy="'+yT+'" r="3.4"/>';
+        else o+='<circle class="ahead" cx="'+x+'" cy="'+yT+'" r="3.4"/>';
+      });
+
+      if(dueOn(r,YEST_DOW)) r.times.forEach(function(t){
+        var x=X(mins(t)).toFixed(1);
+        o+= r.doneY.indexOf(t)>=0
+          ? '<circle class="done-y" cx="'+x+'" cy="'+yY+'" r="2.4"/>'
+          : '<circle class="missed-y" cx="'+x+'" cy="'+yY+'" r="2.2"/>';
+      });
+    });
+
+    o+='<line class="nowline" x1="'+X(NOW).toFixed(1)+'" y1="'+TOP+'" x2="'+
+       X(NOW).toFixed(1)+'" y2="'+(H-AX)+'"/>';
+    return o+'</svg>';
+  }
+
+  function adherence(){
+    function tally(dow,key){
+      var d=0,tot=0;
+      state.routines.forEach(function(r){
+        if(!r.active||!dueOn(r,dow)) return;
+        tot+=r.times.length; d+=r[key].length;
+      });
+      return {d:d,tot:tot};
+    }
+    var y=tally(YEST_DOW,"doneY"), t=tally(TODAY_DOW,"done");
+    var missed=state.routines.reduce(function(s,r){ return s+missedTimes(r).length; },0);
+
+    return '<div class="card">'+
+      '<div class="adh-head"><span class="label">Reminders</span>'+
+        '<span class="adh-nums">yest <b class="num">'+y.d+'/'+y.tot+
+        '</b> · today <b class="num">'+t.d+'/'+t.tot+'</b></span></div>'+
+      timeline()+
+      '<div class="legend">'+
+        '<span><i class="k done"></i>done</span>'+
+        '<span><i class="k missed"></i>missed</span>'+
+        '<span><i class="k ahead"></i>ahead</span>'+
+        (missed?'<span class="miss-n">'+missed+' missed today</span>':'')+
+      '</div>'+
+    '</div>';
+  }
+
+  // ------------------------------------------------------------- Today
+  //
+  // Intake grouped by meal, not by entry. Per-entry segments turned a 16 kcal spoon of
+  // sugar into an invisible sliver and coloured segments arbitrarily; four meal blocks
+  // are always legible and the ramp (lighter earlier in the day) means something. The
+  // remaining budget is a labelled block rather than anonymous grey.
+  var MEALS=[{k:"breakfast",label:"Breakfast"},{k:"lunch",label:"Lunch"},
+             {k:"snack",label:"Snack"},{k:"dinner",label:"Dinner"}];
+  function mealFor(m){ return m<11*60?"breakfast":m<16*60?"lunch":m<19*60?"snack":"dinner"; }
+  function mealLabel(k){
+    for(var i=0;i<MEALS.length;i++) if(MEALS[i].k===k) return MEALS[i].label;
+    return "Snack";
+  }
+  function mealTotals(){
+    var t={breakfast:0,lunch:0,snack:0,dinner:0};
+    state.entries.forEach(function(e){ t[e.meal||"snack"]+=e.k; });
+    return t;
+  }
+
+  function intakeBar(){
+    var tot=consumed(), t=mealTotals(), over=tot>targetKcal();
+    var scale=Math.max(tot,targetKcal()), left=Math.max(0,targetKcal()-tot);
+    var segs="";
+    MEALS.forEach(function(m,i){
+      if(!t[m.k]) return;
+      var w=t[m.k]/scale*100;
+      segs+='<div class="mseg" style="width:'+w.toFixed(2)+'%;opacity:'+(0.58+i*0.14).toFixed(2)+'">'+
+        '<span>'+(w>21?m.label:"")+'</span></div>';
+    });
+    if(left>0) segs+='<div class="mseg rest" style="width:'+(left/scale*100).toFixed(2)+
+      '%"><span>'+(left/scale*100>16?left+' left':"")+'</span></div>';
+
+    var key=MEALS.filter(function(m){ return t[m.k]; }).map(function(m){
+      return '<span>'+m.label+' <b>'+t[m.k]+'</b></span>'; }).join("");
+    key+= over
+      ? '<span class="warnk">over by <b>'+(tot-targetKcal())+'</b></span>'
+      : '<span><b>'+left+'</b> left</span>';
+
+    return '<div class="ibar">'+segs+
+      (over?'<span class="tick" style="left:'+(targetKcal()/scale*100).toFixed(2)+'%"></span>':'')+
+      '</div><div class="ibar-key">'+key+'</div>';
+  }
+
+  // First run. A dashboard of zeros is the obvious answer and the wrong one: it shows
+  // nothing, promises nothing, and asks the user to invent their own reason to return.
+  // Instead — one action, and an honest account of what the next three weeks buy.
+  function welcomeCard(){
+    return '<div class="card welcome">'+
+      '<div><p class="label" style="margin:0 0 6px">Welcome</p>'+
+      '<h3>Weigh yourself. That is the whole of today.</h3></div>'+
+      '<ol class="steps">'+
+        '<li><b>Today</b> One weigh-in. Five seconds, and the app has what it needs to start.</li>'+
+        '<li><b>This week</b> Log roughly what you eat. Rough is fine — it only has to be consistent.</li>'+
+        '<li><b>Week three</b> TrueBurn stops estimating and tells you what you actually burn.</li>'+
+      '</ol>'+
+      '<button class="add" data-act="weigh-open">Log your first weight</button>'+
+      '<span class="hint">No account, nothing uploaded. You can add food and water any time — '+
+      'they do not need setting up first.</span>'+
+    '</div>';
+  }
+
+  // Days 1–28. The cold start is the product's biggest retention risk (§8.3), so the
+  // wait is made legible and finite rather than left as an unexplained silence.
+  function progressCard(){
+    var d=dataDays(), pct=Math.min(100,d/MEASURE_FULL*100);
+    var started=d>=MEASURE_FROM;
+    return '<div class="card">'+
+      '<div class="split"><span class="label">Learning your body</span>'+
+        '<span class="num" style="font-size:12px">'+d+' of '+MEASURE_FULL+' days</span></div>'+
+      '<div class="meter" style="position:relative">'+
+        '<i style="width:'+pct.toFixed(1)+'%"></i>'+
+        '<span class="mark" style="left:'+(MEASURE_FROM/MEASURE_FULL*100).toFixed(1)+'%"></span>'+
+      '</div>'+
+      '<div class="notice '+(started?"accent":"")+'">'+svg(I.info,1.6)+'<span>'+
+        (started
+          ? 'Measuring has started, but it is not confident yet — your target blends your '+
+            'own data with the starting estimate, leaning further on your data each day '+
+            'until day '+MEASURE_FULL+'.'
+          : 'Until day '+MEASURE_FROM+' your target comes from a population formula, which is '+
+            '±10–15% off for any given person. Keep logging and TrueBurn replaces it with '+
+            'your own numbers.')+
+      '</span></div>'+
+    '</div>';
+  }
+
+  function todayView(){
+    if(!hasWeight()){
+      return '<div class="screen-head"><h2>Today</h2>'+
+        '<span class="head-acts">'+
+          '<button class="iconbtn" data-act="settings-open" aria-label="Settings">'+svg(I.gear,1.7)+'</button>'+
+        '</span></div>'+
+        welcomeCard()+
+        '<div class="card">'+
+          '<div class="row"><span class="glyph">'+svg(I.food)+'</span>'+
+          '<span class="row-body"><span class="row-title">Food</span>'+
+          '<span class="row-sub">Nothing logged yet</span></span>'+
+          '<button class="pill pill-accent" data-act="food-open">Add</button></div>'+
+        '</div>'+
+        '<div class="card flush">'+
+          '<div class="water-top"><canvas data-water data-pct="'+
+            Math.min(100,waterMl()/2500*100).toFixed(2)+'"></canvas></div>'+
+          '<div class="card-body">'+
+            '<div class="water-read"><b>'+(waterMl()/1000).toFixed(2)+' L</b>'+
+              '<span>no target until you weigh in</span></div>'+
+            '<div class="quick four">'+[100,250,500,1000].map(function(v){
+              return '<button class="pill pill-mono" data-act="water-arm" data-v="'+v+'">+'+
+                (v>=1000?(v/1000)+" L":v+" ml")+'</button>'; }).join("")+'</div>'+
+          '</div>'+
+        '</div>';
+    }
+
+    var tot=consumed(), rem=targetKcal()-tot, over=tot>targetKcal();
+    var wml=waterMl(), fromR=waterFromRoutines();
+    var wpct=Math.min(100,wml/waterTarget()*100);
+    var missed=state.routines.reduce(function(s,r){ return s+missedTimes(r).length; },0);
+
+    return ''+
+    '<div class="screen-head"><h2>Today</h2>'+
+      '<span class="head-acts">'+
+        '<button class="datebtn" data-act="hist-open">MON 17 AUG '+svg(I.hist,1.8)+'</button>'+
+        '<button class="iconbtn" data-act="settings-open" aria-label="Settings">'+svg(I.gear,1.7)+'</button>'+
+      '</span></div>'+
+
+    '<div class="card">'+
+      '<div class="readout-top"><div><p class="label" style="margin:0 0 6px">Left to eat</p>'+
+      '<div class="big">'+(over?"+":"")+Math.abs(rem)+'<small>kcal</small></div></div>'+
+      '<span class="chip '+(tdeeMode()==="formula"?"chip-estimated":"chip-measured")+'">'+
+        (tdeeMode()==="measured"?"Measured":tdeeMode()==="blended"?"Part measured":"Estimated")+
+        '</span></div>'+
+      '<div class="meter"><i class="'+(over?"over":"")+'" style="width:'+
+        Math.min(100,tot/targetKcal()*100).toFixed(1)+'%"></i></div>'+
+      '<div class="split"><span><span class="num">'+tot+'</span> eaten</span>'+
+        '<span>target <span class="num">'+targetKcal()+'</span></span></div>'+
+      '<div class="notice">'+svg(I.info,1.6)+'<span>Your expenditure is <b class="num">'+TDEE+
+        ' kcal</b>, '+(
+          tdeeMode()==="measured"
+            ? 'measured from your last '+MEASURE_FULL+' days rather than estimated from '+
+              'your height and weight.'
+          : tdeeMode()==="blended"
+            ? 'part measured from your '+dataDays()+' days of data, part still the '+
+              'starting estimate. It leans further on your own numbers each day.'
+            : 'estimated from your height and weight. TrueBurn needs '+MEASURE_FROM+
+              ' days of weigh-ins before it can start measuring.')+'</span></div>'+
+    '</div>'+
+    (dataDays()<MEASURE_FULL?progressCard():'')+
+
+    (function(){
+      var d=rangeDelta(), down=d.kg<0;
+      return '<div class="card">'+
+        '<div class="row"><span class="glyph">'+svg(I.scale)+'</span>'+
+        '<span class="row-body"><span class="row-title">Weight</span>'+
+        '<span class="row-sub">trend <span class="num">'+trendNow().toFixed(1)+' kg</span>'+
+          (state.loggedToday?' · logged today':'')+'</span></span>'+
+        '<button class="pill pill-accent" data-act="weigh-open">Log</button></div>'+
+        '<div class="seg compact">'+RANGES.map(function(r){
+          return '<button data-act="w-range" data-v="'+r.k+'" aria-pressed="'+
+            (state.wRange===r.k)+'">'+r.label+'</button>'; }).join("")+'</div>'+
+        chart()+
+        '<div class="delta'+(down?" down":" up")+'">'+
+          '<b>'+(down?"−":"+")+Math.abs(d.kg).toFixed(1)+' kg</b>'+
+          '<span>over the '+(state.wRange==="year"?"year":"past "+d.days+" days")+
+          ' · '+(down?"−":"+")+Math.abs(d.perWeek).toFixed(2)+' kg a week</span>'+
+        '</div>'+
+        '<div class="split" style="font-size:11.5px"><span>'+d.start.toFixed(1)+
+          ' kg then</span><span>'+d.end.toFixed(1)+' kg now</span></div>'+
+      '</div>';
+    })()+
+
+    // Food — segments are meals, so the shape of the day reads at a glance.
+    '<div class="card">'+
+      '<div class="row"><span class="glyph">'+svg(I.food)+'</span>'+
+      '<span class="row-body"><span class="row-title">Food</span>'+
+      '<span class="row-sub"><span class="num">'+tot+'</span> kcal · '+
+        state.entries.length+' item'+(state.entries.length===1?"":"s")+'</span></span>'+
+      '<button class="pill pill-accent" data-act="food-open">Add</button></div>'+
+      intakeBar()+
+      (state.entries.length===0
+        ? '<button class="pill" data-act="copy-yest" style="width:100%">'+
+          'Same as yesterday ('+state.yesterdayEntries.reduce(function(s,e){return s+e.k;},0)+' kcal)</button>'
+        : '')+
+    '</div>'+
+
+    // Water — the fill level is the reading, so the animation carries information.
+    '<div class="card flush">'+
+      '<div class="water-top">'+
+        '<canvas data-water data-pct="'+wpct.toFixed(2)+'"></canvas>'+
+      '</div>'+
+      '<div class="card-body">'+
+        '<div class="water-read"><b>'+(wml/1000).toFixed(2)+' L</b>'+
+          '<span>of '+(waterTarget()/1000).toFixed(2)+' L</span>'+
+          (fromR?'<em>'+fromR+' ml from reminders</em>':'')+'</div>'+
+        // Two-step add: the first tap arms, the second commits. A stray tap on a card
+        // you scroll past every day should not silently rewrite the day's log.
+        (state.armedWater
+          ? '<div class="quick">'+
+              '<button class="pill pill-accent" style="flex:1" data-act="water-commit">'+
+                'Add '+(state.armedWater>=1000?(state.armedWater/1000)+" L":state.armedWater+" ml")+
+                '?</button>'+
+              '<button class="pill" data-act="water-cancel">Cancel</button>'+
+            '</div>'
+          : '<div class="quick four">'+
+              [100,250,500,1000].map(function(v){
+                return '<button class="pill pill-mono" data-act="water-arm" data-v="'+v+'">+'+
+                  (v>=1000?(v/1000)+" L":v+" ml")+'</button>'; }).join("")+
+            '</div>')+
+      '</div>'+
+    '</div>'+
+
+    (isPaused()
+      ? '<div class="notice warn">'+svg(I.pause,2)+'<span>All routines paused until <b>'+pauseLabel()+'</b>.</span></div>'
+      : missed
+        ? '<button class="notice warn" data-act="go-routines">'+svg(I.bell,1.6)+
+          '<span><b>'+missed+' reminder'+(missed>1?"s":"")+'</b> missed today.</span></button>'
+        : '<div class="notice accent">'+svg(I.info,1.6)+'<span>Everything due so far is done.</span></div>');
+  }
+
+  // ------------------------------------------------------------- Routines
+  function routineCard(r){
+    var t=TYPES[r.type], miss=missedTimes(r), nx=nextTime(r);
+    var pct=Math.min(100,r.elapsed/r.totalDays*100);
+    var dueToday=dueOn(r,TODAY_DOW);
+    var allDone=dueToday&&r.done.length>=r.times.length;
+
+    return '<div class="routine'+(r.active?"":" paused")+(miss.length?" overdue":"")+'">'+
+      '<button class="r-head" data-act="edit" data-id="'+r.id+'">'+
+        '<span class="glyph">'+svg(t.icon)+'</span>'+
+        '<span class="row-body"><span class="r-name">'+h(r.name)+'</span>'+
+        '<span class="r-when">'+h(whenText(r))+'</span></span>'+
+        '<span class="chev">'+svg(I.chev,2)+'</span></button>'+
+      // Pips say *which* of today's reminders landed. "3 of 6" cannot: it is the
+      // difference between knowing you missed two and knowing you missed the afternoon.
+      (dueToday
+        ? '<div class="today-line">'+
+            '<span class="pips">'+r.times.map(function(t){
+              var done=r.done.indexOf(t)>=0;
+              return '<i class="'+(done?"p-done":(mins(t)<NOW&&!isPaused()?"p-miss":"p-ahead"))+
+                '" title="'+ampm(t)+'"></i>'; }).join("")+'</span>'+
+            '<span class="today-n'+(miss.length?" warn":"")+'"><b>'+r.done.length+'</b> of '+
+              r.times.length+' done today</span>'+
+          '</div>'
+        : '<div class="today-line"><span class="today-n muted">Not due today</span></div>')+
+      '<div class="dayline">'+
+        '<div class="meter thin"><i style="width:'+pct.toFixed(1)+'%"></i></div>'+
+        '<span>Day '+r.elapsed+' of '+r.totalDays+'</span></div>'+
+      '<div class="r-acts">'+
+        (r.active&&!isPaused()&&dueToday&&nx
+          ? '<button class="pill act-done'+(miss.length?" act-due":"")+'" data-act="done" data-id="'+r.id+
+            '" data-v="'+nx+'">'+(miss.length?"Missed "+ampm(miss[0])+" — tick":"Tick "+ampm(nx))+'</button>'
+          : allDone
+            ? '<button class="pill act-done" data-state="done" data-act="untick" data-id="'+r.id+
+              '">All done today</button>'
+            : '<span style="flex:1"></span>')+
+        '<button class="pill" data-act="toggle" data-id="'+r.id+'">'+(r.active?"Pause":"Resume")+'</button>'+
+      '</div></div>';
+  }
+
+  function routinesView(){
+    var act=state.routines.filter(function(r){return r.active;});
+    var pau=state.routines.filter(function(r){return !r.active;});
+    var perDayTotal=act.reduce(function(s,r){return s+r.times.length;},0);
+
+    var o='<div class="screen-head"><h2>Routines</h2><span class="date">'+perDayTotal+'/DAY</span></div>';
+    o+=isPaused()
+      ? '<div class="banner">'+svg(I.pause,2)+'<span>Paused until <b>'+pauseLabel()+'</b></span>'+
+        '<span class="spacer"></span><button data-act="resume-all">Resume now</button></div>' : '';
+    o+=adherence();
+    o+='<div class="actions-2"><button class="add" data-act="new">New routine</button>'+
+       (isPaused()?'':'<button class="add ghost" data-act="pause-all">Pause all</button>')+'</div>';
+    o+='<div style="display:flex;flex-direction:column;gap:11px">'+
+       '<p class="label" style="margin:0">Active · '+act.length+'</p>'+
+       (act.length?act.map(routineCard).join("")
+         :'<div class="starter">'+
+          '<p>No routines yet. These two are the ones that pay for themselves — a water '+
+          'reminder logs the water for you, and a meal reminder keeps your log complete '+
+          'enough for TrueBurn to measure anything.</p>'+
+          '<div class="inline-2">'+
+            '<button class="pill pill-accent" style="padding:11px" data-act="starter" data-v="water">Water reminders</button>'+
+            '<button class="pill pill-accent" style="padding:11px" data-act="starter" data-v="food">Meal reminders</button>'+
+          '</div></div>')+'</div>';
+    if(pau.length) o+='<div style="display:flex;flex-direction:column;gap:11px">'+
+      '<p class="label" style="margin:0">Paused · '+pau.length+'</p>'+pau.map(routineCard).join("")+'</div>';
+    return o;
+  }
+
+  // ------------------------------------------------------------- food sheet
+  function allFoods(){ return state.customFoods.concat(FOODS); }
+
+  function foodSheet(){
+    var f=state.food;
+
+    if(f.custom.open){
+      var kc=parseInt(f.custom.kcal,10)||0;
+      return '<div class="grabber"></div>'+
+        '<div class="screen-head"><h2>Add your own</h2></div>'+
+        '<div class="field"><span class="label">What is it</span>'+
+          '<input type="text" data-act="c-name" value="'+h(f.custom.name)+'" placeholder="Amma\'s sambar"></div>'+
+        '<div class="field"><span class="label">Calories in one serving</span><div class="inline-2">'+
+          '<input type="number" min="0" max="3000" data-act="c-kcal" value="'+h(f.custom.kcal)+'" placeholder="160">'+
+          '<div class="suffix">kcal per serving</div></div></div>'+
+        '<p class="hint">Saved for reuse, so next time it is one tap. A rough number you use every '+
+        'time beats an exact number you re-guess — re-guessing biases the expenditure measurement (§5.1).</p>'+
+        '<div class="inline-2"><button class="pill" data-act="c-cancel" style="padding:12px">Back</button>'+
+        '<button class="add" data-act="c-save"'+(f.custom.name&&kc?'':' disabled style="opacity:.45"')+
+        '>Save and add</button></div>';
+    }
+
+    if(f.pick){
+      var kcal=Math.round(f.pick.k*f.qty);
+      var now=consumed(), after=now+kcal;
+      var scale=Math.max(after,targetKcal());
+      var overBy=after-targetKcal();
+      return '<div class="grabber"></div>'+
+        '<div class="screen-head"><h2>'+h(f.pick.n)+'</h2>'+
+          '<span class="date">'+mealLabel(mealFor(NOW)).toUpperCase()+'</span></div>'+
+        '<div class="stepper">'+
+          '<button data-act="q-dec" aria-label="Less">−</button>'+
+          '<span class="qty"><b>'+(f.qty%1?f.qty.toFixed(1):f.qty)+'</b><span>× '+h(f.pick.u)+'</span></span>'+
+          '<button data-act="q-inc" aria-label="More">+</button></div>'+
+        // Show where this lands before committing, so the decision is informed rather
+        // than something you check afterwards and regret.
+        '<div class="proj">'+
+          '<div class="split"><span>Adding</span><span class="num" style="font-size:17px">'+kcal+' kcal</span></div>'+
+          '<div class="projbar">'+
+            '<i class="now" style="width:'+(now/scale*100).toFixed(2)+'%"></i>'+
+            '<i class="plus'+(overBy>0?" over":"")+'" style="width:'+(kcal/scale*100).toFixed(2)+'%"></i>'+
+          '</div>'+
+          '<div class="split" style="font-size:12px"><span>Takes you to <b class="num">'+after+
+            '</b> of <b class="num">'+targetKcal()+'</b></span><span'+(overBy>0?' class="num-warn"':'')+'>'+
+            (overBy>0?'over by '+overBy:(targetKcal()-after)+' left')+'</span></div>'+
+        '</div>'+
+        '<div class="inline-2"><button class="pill" data-act="f-back" style="padding:12px">Back</button>'+
+          '<button class="add" data-act="f-add">Add '+kcal+' kcal</button></div>';
+    }
+
+    // Recents first in recency order, then everything else lightest-first. Sorting the
+    // tail by calories puts the cheap choice in reach and means the list never depends
+    // on remembering an exact name.
+    var byKcal=function(a,b){ return a.k-b.k; };
+    var q=f.q.trim().toLowerCase();
+    var list, heading;
+    if(q){
+      var hit=allFoods().filter(function(x){ return x.n.toLowerCase().indexOf(q)>=0; });
+      var rHit=hit.filter(function(x){ return state.recents.indexOf(x.n)>=0; });
+      var oHit=hit.filter(function(x){ return state.recents.indexOf(x.n)<0; }).sort(byKcal);
+      list=rHit.concat(oHit);
+      heading=hit.length+" match"+(hit.length===1?"":"es")+", lightest first";
+    }else{
+      var all=allFoods();
+      var rec=state.recents.map(function(n){
+        for(var i=0;i<all.length;i++) if(all[i].n===n) return all[i];
+        return null; }).filter(Boolean);
+      var rest=all.filter(function(x){ return state.recents.indexOf(x.n)<0; }).sort(byKcal);
+      // Deliberately uncapped. A length cap on top of a lightest-first sort silently
+      // buries every heavy item — biryani, samosa, pav bhaji — where browsing can never
+      // reach them. The list scrolls; truncating it only hides food people actually eat.
+      list=rec.concat(rest);
+      heading="Recent first, then lightest";
+    }
+    // Three labelled groups rather than one run-on list: what you keep eating, what you
+    // added yourself, then the catalogue. Without the separators a custom food vanishes
+    // into the sorted tail and feels like it was never saved.
+    var groups=null;
+    if(!q){
+      var recNames=state.recents;
+      var mine=state.customFoods.filter(function(x){ return recNames.indexOf(x.n)<0; });
+      var mineNames=mine.map(function(x){ return x.n; });
+      groups=[
+        {label:"Recent",     items:rec},
+        {label:"Your foods", items:mine},
+        {label:"All foods · lightest first",
+         items:FOODS.filter(function(x){ return recNames.indexOf(x.n)<0; }).sort(byKcal)}
+      ].filter(function(g){ return g.items.length; });
+    }
+
+    function item(x){
+      return '<button class="fitem" data-act="f-pick" data-v="'+h(x.n)+'">'+
+        '<span class="fname">'+h(x.n)+'<br><span class="funit">'+h(x.u)+'</span></span>'+
+        '<span class="fkcal">'+x.k+'</span></button>';
+    }
+    var body = groups
+      ? groups.map(function(g){
+          return '<div class="fgroup">'+g.label+'</div>'+g.items.map(item).join(""); }).join("")
+      : (list.length ? list.map(item).join("")
+                     : '<div class="empty">Nothing matches. Add it as your own below.</div>');
+
+    return '<div class="grabber"></div>'+
+      '<div class="screen-head"><h2>Add food</h2><span class="date">'+allFoods().length+' ITEMS</span></div>'+
+      '<input type="search" data-act="f-q" value="'+h(f.q)+'" placeholder="Search dal, roti, coffee…">'+
+      '<div class="field">'+(groups?'':'<span class="label">'+heading+'</span>')+
+        '<div class="flist">'+body+'</div></div>'+
+      '<button class="pill" data-act="c-open" style="width:100%;padding:11px">+ Add your own food</button>'+
+      (state.entries.length
+        ? '<button class="pill" data-act="copy-yest" style="width:100%;padding:11px">Copy yesterday instead</button>'
+        : '');
+  }
+
+  // ------------------------------------------------------------- routine sheet
+  function draftFromType(type){
+    var t=JSON.parse(JSON.stringify(TYPES[type].tpl)); t.type=type; t.totalDays=30; return t;
+  }
+  // How much of the recommended daily intake this routine actually delivers.
+  //
+  // Six 250 ml glasses is 1.5 L against a ~2.75 L target — barely half. A schedule that
+  // quietly under-delivers is worse than no schedule, because the user believes it is
+  // handled. Warn at the point of setup, and say what the shortfall costs them, rather
+  // than letting them discover it a fortnight later.
+  function coverage(d){
+    var total=d.times.length*d.amountMl, target=waterTarget();
+    var pct=Math.round(total/target*100);
+    if(!d.amountMl) return '<div class="load cov"><span>Set an amount to see how much of '+
+      'your '+(target/1000).toFixed(2)+' L target this covers.</span></div>';
+    if(total>=target){
+      return '<div class="load cov ok">'+svg(I.info,1.6)+'<span><span class="num">'+
+        d.times.length+' × '+d.amountMl+' ml</span> is <span class="num">'+
+        (total/1000).toFixed(2)+' L</span> a day — covers your <span class="num">'+
+        (target/1000).toFixed(2)+' L</span> recommended intake.</span></div>';
+    }
+    return '<div class="load cov heavy">'+svg(I.info,1.6)+'<span><span class="num">'+
+      d.times.length+' × '+d.amountMl+' ml</span> is only <span class="num">'+
+      (total/1000).toFixed(2)+' L</span> a day, <span class="num">'+pct+'%</span> of your '+
+      '<span class="num">'+(target/1000).toFixed(2)+' L</span> recommended intake. '+
+      'You would still need <span class="num">'+((target-total)/1000).toFixed(2)+
+      ' L</span> by hand — add a time, or raise the amount.</span></div>';
+  }
+
+  function routineSheet(){
+    var d=state.draft; if(!d) return "";
+    var t=TYPES[d.type], editing=state.editingId!==null;
+    var n=d.times.length, wk=n*d.days.length, heavy=n>6;
+    var typeBtns=Object.keys(TYPES).map(function(k){
+      return '<button data-act="d-type" data-v="'+k+'" aria-pressed="'+(d.type===k)+'">'+TYPES[k].label+'</button>';
+    }).join("");
+    var dayBtns=DAYS.map(function(l,i){
+      return '<button data-act="d-day" data-v="'+i+'" aria-pressed="'+(d.days.indexOf(i)>=0)+
+        '" aria-label="'+DAY_FULL[i]+'">'+l+'</button>'; }).join("");
+    var timeRows=d.times.map(function(tm,i){
+      return '<div class="time-row"><input type="time" value="'+tm+'" data-act="d-time" data-i="'+i+
+        '" aria-label="Reminder time '+(i+1)+'">'+
+        (d.times.length>1?'<button class="t-del" data-act="t-del" data-i="'+i+
+          '" aria-label="Remove this time">'+svg(I.x,2)+'</button>':'')+'</div>'; }).join("");
+
+    return '<div class="grabber"></div>'+
+      '<div class="screen-head"><h2>'+(editing?"Edit routine":"New routine")+'</h2></div>'+
+      '<div class="field"><span class="label">Type</span><div class="seg">'+typeBtns+'</div>'+
+        (editing?'':'<span class="hint">Picking a type fills in a ready-made schedule. Change anything below.</span>')+
+      '</div>'+
+      '<div class="field"><span class="label">Name</span><input type="text" data-act="d-name" value="'+
+        h(d.name)+'" placeholder="'+h(t.label==="Custom"?"What is this reminder for?":t.label+" reminder")+'"></div>'+
+      '<div class="field"><span class="label">Remind me at</span><div class="times">'+timeRows+
+        '<button class="t-add" data-act="t-add">+ Add another time</button></div></div>'+
+      '<div class="field"><span class="label">Days</span><div class="daybtns">'+dayBtns+'</div></div>'+
+      (d.type==="water"
+        ? '<div class="field"><span class="label">Each reminder logs</span><div class="inline-2">'+
+          '<input type="number" min="50" max="1000" step="50" data-act="d-ml" value="'+d.amountMl+
+          '" aria-label="Millilitres per reminder"><div class="suffix">ml, added to Today</div></div>'+
+          coverage(d)+'</div>'
+        : '')+
+      '<div class="field"><span class="label">Run for</span><div class="inline-2">'+
+        '<input type="number" min="1" max="365" data-act="d-total" value="'+d.totalDays+
+        '" aria-label="Number of days"><div class="suffix">days, then it retires</div></div></div>'+
+      '<div class="field"><span class="label">Notification text</span><input type="text" data-act="d-msg" value="'+
+        h(d.message)+'" placeholder="Your own words"></div>'+
+      '<div class="preview"><span class="preview-app">TrueBurn · now</span>'+
+        '<span class="preview-title">'+h(d.name||(t.label==="Custom"?"Your routine":t.label+" reminder"))+'</span>'+
+        '<span class="preview-body">'+h(d.message||"Your own words appear here.")+
+        (d.type==="water"&&d.amountMl?" Marking done logs "+d.amountMl+" ml.":"")+'</span></div>'+
+      '<div class="load den'+(heavy?" heavy":"")+'">'+(heavy?svg(I.info,1.6):"")+
+        '<span><span class="num">'+n+'</span> a day, <span class="num">'+wk+'</span> a week'+
+        (heavy?' — dense enough that people usually mute it.':'.')+'</span></div>'+
+      '<div class="inline-2"><button class="pill" data-act="close" style="padding:12px">Cancel</button>'+
+        '<button class="add" data-act="save">'+(editing?"Save changes":"Start routine")+'</button></div>'+
+      (editing?'<button class="del-link" data-act="del" data-id="'+state.editingId+'">Delete this routine</button>':'');
+  }
+
+  var PAUSE_OPTS=[{m:60,label:"1 hour"},{m:240,label:"4 hours"},
+                  {m:-2,label:"Rest of today"},{m:-1,label:"Until tomorrow"}];
+  function pauseSheet(){
+    var rows=PAUSE_OPTS.map(function(o){
+      var until=o.m===-1?"tomorrow morning":o.m===-2?"midnight":ampm(clock(NOW+o.m));
+      return '<button class="pill" style="width:100%;padding:12px;border-radius:12px;display:flex;'+
+        'justify-content:space-between" data-act="pause-for" data-v="'+o.m+'">'+
+        '<span>'+o.label+'</span><span class="num" style="color:var(--ink-3)">until '+until+'</span></button>';
+    }).join("");
+    return '<div class="grabber"></div><div class="screen-head"><h2>Pause everything</h2></div>'+
+      '<p class="hint">Nothing fires until then. Day counts keep running, so a pause costs no progress.</p>'+
+      '<div style="display:flex;flex-direction:column;gap:8px">'+rows+'</div>'+
+      '<button class="pill" data-act="close" style="padding:12px">Cancel</button>';
+  }
+
+  // ------------------------------------------------------------- settings sheet
+  var ACTIVITY=[{k:"sedentary",l:"Sedentary"},{k:"light",l:"Light"},
+                {k:"moderate",l:"Moderate"},{k:"active",l:"Active"}];
+  var RATES=[0.25,0.5,0.75,1.0];
+
+  function settingsSheet(){
+    var p=state.profile, g=state.goal, t=targetInfo();
+
+    var goalBtns=[["lose","Lose"],["maintain","Maintain"],["gain","Gain"]].map(function(x){
+      return '<button data-act="s-goal" data-v="'+x[0]+'" aria-pressed="'+(g.kind===x[0])+'">'+
+        x[1]+'</button>'; }).join("");
+
+    return '<div class="grabber"></div>'+
+      '<div class="screen-head"><h2>Settings</h2></div>'+
+
+      '<div class="field"><span class="label">Appearance</span>'+
+        '<div class="seg">'+[["light","Light"],["dark","Dark"],["auto","Auto"]].map(function(x){
+          return '<button data-act="s-theme" data-v="'+x[0]+'" aria-pressed="'+(state.theme===x[0])+
+            '">'+x[1]+'</button>'; }).join("")+'</div>'+
+        '<span class="hint">Auto follows whatever your phone is set to, and changes with '+
+        'it through the day.</span></div>'+
+
+      '<div class="field"><span class="label">Goal</span><div class="seg">'+goalBtns+'</div>'+
+        (g.kind!=="maintain"
+          ? '<div class="seg">'+RATES.map(function(r){
+              return '<button data-act="s-rate" data-v="'+r+'" aria-pressed="'+(g.kgPerWeek===r)+
+                '">'+r+' kg</button>'; }).join("")+'</div>'
+          : '')+
+        '<div class="load ok">'+svg(I.info,1.6)+'<span>Your daily target is <span class="num">'+
+          t.kcal+' kcal</span> — measured expenditure <span class="num">'+TDEE+
+          '</span> minus the deficit for this goal.</span></div>'+
+        (t.rateCapped?'<div class="load heavy">'+svg(I.info,1.6)+
+          '<span>Rate capped at <span class="num">1.0 kg</span> a week.</span></div>':'')+
+        (t.floored?'<div class="load heavy">'+svg(I.info,1.6)+
+          '<span>Raised to the <span class="num">'+t.floor+' kcal</span> floor — this goal '+
+          'would mean eating less than is safe to sustain. Expect slower progress.</span></div>':'')+
+      '</div>'+
+
+      '<div class="field"><span class="label">About you</span>'+
+        '<div class="inline-2">'+
+          '<input type="number" min="120" max="230" data-act="s-height" value="'+p.heightCm+
+            '" aria-label="Height in centimetres"><div class="suffix">cm tall</div></div>'+
+        '<div class="inline-2">'+
+          '<input type="number" min="1920" max="2010" data-act="s-year" value="'+p.birthYear+
+            '" aria-label="Year of birth"><div class="suffix">year of birth</div></div>'+
+      '</div>'+
+
+      '<div class="field"><span class="label">Starting estimate</span>'+
+        '<div class="seg">'+[["mifflin-male","Formula A"],["mifflin-female","Formula B"]].map(function(x){
+          return '<button data-act="s-variant" data-v="'+x[0]+'" aria-pressed="'+(p.variant===x[0])+
+            '">'+x[1]+'</button>'; }).join("")+'</div>'+
+        '<div class="seg">'+ACTIVITY.map(function(a){
+          return '<button data-act="s-activity" data-v="'+a.k+'" aria-pressed="'+(p.activity===a.k)+
+            '">'+a.l+'</button>'; }).join("")+'</div>'+
+        '<span class="hint">These only shape the first three weeks. Once TrueBurn has '+
+        'enough weigh-ins it measures your expenditure directly and stops using them. '+
+        'Pick the basal formula that fits you rather than having one inferred.</span>'+
+      '</div>'+
+
+      '<div class="field"><span class="label">Reminders</span>'+
+        '<div class="inline-2"><input type="time" data-act="s-weigh" value="'+state.weighAt+
+          '" aria-label="Weigh-in reminder time"><div class="suffix">weigh-in nudge</div></div>'+
+        '<div class="inline-2">'+
+          '<input type="time" data-act="s-qfrom" value="'+state.quietFrom+'" aria-label="Quiet from">'+
+          '<input type="time" data-act="s-qto" value="'+state.quietTo+'" aria-label="Quiet until">'+
+        '</div>'+
+        '<span class="hint">Nothing fires between '+ampm(state.quietFrom)+' and '+
+          ampm(state.quietTo)+'.</span>'+
+      '</div>'+
+
+      '<div class="field"><span class="label">Your data</span>'+
+        '<button class="pill" style="padding:11px">Export everything as JSON</button>'+
+        '<button class="del-link">Delete all data</button>'+
+        '<span class="hint">Everything stays on this phone. There is no account and '+
+        'nothing is uploaded.</span>'+
+      '</div>'+
+
+      '<button class="add" data-act="close">Done</button>';
+  }
+
+  // ------------------------------------------------------------- weigh-in sheet
+  //
+  // One number, and an honest preview of what it does. Raw weight swings ±1–2 kg on
+  // water alone (§4.1), so the sheet shows the trend the entry produces rather than
+  // letting the user react to the raw figure — that reaction is the behaviour the
+  // trend line exists to prevent.
+  function weighSheet(){
+    var v=state.wDraft;
+    var prev=series.trend[TODAY_I-1];
+    var newTrend=prev+0.25*(v-prev);
+    var move=newTrend-trendNow();
+
+    return '<div class="grabber"></div>'+
+      '<div class="screen-head"><h2>Log weight</h2><span class="date">MON 17 AUG</span></div>'+
+
+      '<div class="stepper">'+
+        '<button data-act="w-dec" aria-label="Lower">−</button>'+
+        '<span class="qty"><b>'+v.toFixed(1)+'</b><span>kg</span></span>'+
+        '<button data-act="w-inc" aria-label="Higher">+</button></div>'+
+      '<div class="quick" style="justify-content:center">'+
+        [-1,-0.5,0.5,1].map(function(s){
+          return '<button class="pill pill-mono" data-act="w-nudge" data-v="'+s+'">'+
+            (s>0?"+":"")+s+'</button>'; }).join("")+'</div>'+
+
+      '<div class="proj">'+
+        '<div class="split"><span>Trend after this</span><span class="num" style="font-size:17px">'+
+          newTrend.toFixed(1)+' kg</span></div>'+
+        '<div class="split" style="font-size:12px"><span>Moves the trend by <b class="num">'+
+          (move>=0?"+":"−")+Math.abs(move).toFixed(2)+' kg</b></span>'+
+          '<span>from <b class="num">'+trendNow().toFixed(1)+'</b></span></div>'+
+      '</div>'+
+
+      '<p class="hint">Day-to-day weight swings a kilo or two on water and food alone. '+
+      'TrueBurn records the number you enter but reads the trend, so a heavy morning '+
+      'does not mean a bad week.</p>'+
+
+      '<div class="inline-2"><button class="pill" data-act="close" style="padding:12px">Cancel</button>'+
+        '<button class="add" data-act="w-save">'+(state.loggedToday?"Update":"Save")+'</button></div>';
+  }
+
+  // ------------------------------------------------------------- history sheet
+  function miniBar(kcal){
+    var scale=Math.max(kcal,targetKcal()), over=kcal>targetKcal();
+    return '<div class="hbar"><i class="'+(over?"over":"")+'" style="width:'+
+      (kcal/scale*100).toFixed(1)+'%"></i>'+
+      (over?'<span class="t" style="left:'+(targetKcal()/scale*100).toFixed(1)+'%"></span>':'')+'</div>';
+  }
+
+  function historySheet(){
+    var d=state.histDay;
+
+    // ---- one past day, in short ----
+    if(d!==null){
+      var r=history[d], over=r.kcal-targetKcal(), net=r.kcal-TDEE;
+      var scale=Math.max(r.kcal,targetKcal());
+      var segs=MEALS.map(function(m,i){
+        if(!r.meals[m.k]) return "";
+        var w=r.meals[m.k]/scale*100;
+        return '<div class="mseg" style="width:'+w.toFixed(2)+'%;opacity:'+(0.58+i*0.14).toFixed(2)+
+          '"><span>'+(w>21?m.label:"")+'</span></div>';
+      }).join("");
+      var left=Math.max(0,targetKcal()-r.kcal);
+      if(left>0) segs+='<div class="mseg rest" style="width:'+(left/scale*100).toFixed(2)+'%"></div>';
+
+      return '<div class="grabber"></div>'+
+        '<div class="screen-head"><h2>'+r.label+'</h2>'+
+          '<span class="date">'+(r.ago===1?"YESTERDAY":r.ago+" DAYS AGO")+'</span></div>'+
+
+        '<div class="readout-top"><div><p class="label" style="margin:0 0 6px">Eaten</p>'+
+          '<div class="big">'+r.kcal+'<small>kcal</small></div></div>'+
+          '<span class="chip '+(over>0?"chip-measured":"chip-measured")+'">'+
+          (over>0?"+"+over+" over":Math.abs(over)+" under")+'</span></div>'+
+        '<div class="ibar">'+segs+'</div>'+
+        '<div class="ibar-key">'+MEALS.filter(function(m){return r.meals[m.k];}).map(function(m){
+          return '<span>'+m.label+' <b>'+r.meals[m.k]+'</b></span>'; }).join("")+'</div>'+
+
+        '<div class="card" style="gap:10px">'+
+          '<div class="split"><span>Burned, measured</span><span class="num">'+TDEE+' kcal</span></div>'+
+          '<div class="split"><span>Net for the day</span><span class="num'+(net>0?"":" num-warn")+'">'+
+            (net>0?"+":"")+net+' kcal</span></div>'+
+          '<div class="split"><span>Weight trend</span><span class="num">'+r.trend.toFixed(1)+' kg</span></div>'+
+          '<div class="split"><span>Water</span><span class="num">'+(r.waterMl/1000).toFixed(2)+' L</span></div>'+
+          '<div class="split"><span>Reminders</span><span class="num">'+r.remDone+' of '+r.remDue+'</span></div>'+
+        '</div>'+
+
+        '<button class="pill" data-act="h-back" style="padding:12px">Back to history</button>';
+    }
+
+    // ---- the range summary + day list ----
+    var s=summary(state.histRange);
+    var rows=history.slice(0,state.histRange);
+
+    return '<div class="grabber"></div>'+
+      '<div class="screen-head"><h2>History</h2></div>'+
+      '<div class="seg">'+[7,30].map(function(n){
+        return '<button data-act="h-range" data-v="'+n+'" aria-pressed="'+(state.histRange===n)+
+          '">Last '+n+' days</button>'; }).join("")+'</div>'+
+
+      '<div class="card sumcard">'+
+        '<span class="label">Averages over '+s.days+' days</span>'+
+        '<div class="sumgrid">'+
+          '<div><b>'+s.avgK+'</b><span>eaten / day</span></div>'+
+          '<div><b>'+TDEE+'</b><span>burned / day</span></div>'+
+          '<div><b'+(s.net<0?' class="num"':'')+'>'+(s.net>0?"+":"")+s.net+'</b><span>net / day</span></div>'+
+        '</div>'+
+        // The engine checking itself in public. If these two diverge, the measurement is
+        // drifting and the user deserves to see it rather than be told a tidy number.
+        '<div class="reconcile"><span>Predicted <b>'+s.predicted.toFixed(2)+' kg</b></span>'+
+          '<span>Actual <b>'+s.actual.toFixed(2)+' kg</b></span></div>'+
+        '<div class="split" style="font-size:11.5px"><span>Water <b class="num">'+
+          (s.water/1000).toFixed(2)+' L</b>/day</span>'+
+          '<span>Reminders <b class="num">'+s.rem+'/'+s.remD+'</b></span></div>'+
+      '</div>'+
+
+      '<div class="field"><span class="label">Day by day</span>'+
+        '<div class="flist" style="max-height:300px">'+rows.map(function(r,i){
+          return '<button class="hrow" data-act="h-day" data-v="'+i+'">'+
+            '<span class="hdate">'+r.label+'</span>'+ miniBar(r.kcal)+
+            '<span class="hkcal">'+r.kcal+'</span>'+
+            '<span class="hrem">'+r.remDone+'/'+r.remDue+'</span></button>';
+        }).join("")+'</div></div>'+
+
+      '<button class="pill" data-act="close" style="padding:12px">Close</button>';
+  }
+
+  function sheetBody(){
+    if(state.sheet==="pause") return pauseSheet();
+    if(state.sheet==="food") return foodSheet();
+    if(state.sheet==="history") return historySheet();
+    if(state.sheet==="weight") return weighSheet();
+    if(state.sheet==="settings") return settingsSheet();
+    return routineSheet();
+  }
+
+  // ------------------------------------------------------------- render
+  function phone(key,cap,sub){
+    var tab=state.tab[key], open=state.sheet!==null&&state.sheetPhone===key;
+    return '<figure class="device"><div class="screen" data-phone="'+key+'">'+
+      '<div class="statusbar"><span>'+clock(NOW)+'</span><span>TrueBurn</span></div>'+
+      '<div class="viewport">'+(tab==="today"?todayView():routinesView())+'</div>'+
+      '<nav class="tabbar">'+
+        '<button class="tab" data-act="tab" data-phone="'+key+'" data-v="today" aria-selected="'+(tab==="today")+'">'+
+          svg(I.today)+'<span>Today</span></button>'+
+        '<button class="tab" data-act="tab" data-phone="'+key+'" data-v="routines" aria-selected="'+(tab==="routines")+'">'+
+          svg(I.bell)+'<span>Routines</span></button></nav>'+
+      '<div class="sheet-scrim" data-act="close" data-open="'+open+'"></div>'+
+      '<div class="sheet" data-open="'+open+'" role="dialog" aria-label="Sheet">'+
+        (open?sheetBody():'')+'</div>'+
+      '</div><figcaption><b>'+cap+'</b><span>'+sub+'</span></figcaption></figure>';
+  }
+
+  var stage=document.getElementById("stage");
+
+  function render(){
+    var tops={};
+    Array.prototype.forEach.call(stage.querySelectorAll(".viewport"),function(v){
+      tops[v.parentNode.getAttribute("data-phone")]=v.scrollTop; });
+    stage.className=state.intro?"stage intro":"stage";
+    stage.innerHTML=phone("a","Today","log, and see where you stand")+
+                    phone("b","Routines","set once, then mostly forget");
+    Array.prototype.forEach.call(stage.querySelectorAll(".viewport"),function(v){
+      var k=v.parentNode.getAttribute("data-phone"); if(tops[k]) v.scrollTop=tops[k]; });
+    paintWater();
+  }
+
+  // ------------------------------------------------------------- water canvas
+  //
+  // Two offset sine layers. The fill height is the actual progress, so the motion
+  // carries the reading rather than decorating it. Static under reduced-motion.
+  var reduceMotion = typeof matchMedia==="function" &&
+    matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var waterShown = null;
+
+  function readVar(name,fallback){
+    try{ var v=getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+         return v||fallback; }catch(e){ return fallback; }
+  }
+
+  function paintWater(phase){
+    if(typeof document.querySelectorAll!=="function") return;
+    var cvs=document.querySelectorAll("canvas[data-water]");
+    if(!cvs||!cvs.length) return;
+    var accent=readVar("--accent","#0E6B5B"), soft=readVar("--accent-soft","#E4F0EC");
+    var t=phase||0;
+
+    Array.prototype.forEach.call(cvs,function(cv){
+      if(typeof cv.getContext!=="function") return;
+      var ctx=cv.getContext("2d"); if(!ctx) return;
+      var dpr=window.devicePixelRatio||1;
+      var w=cv.clientWidth||320, hh=cv.clientHeight||104;
+      if(cv.width!==Math.round(w*dpr)){ cv.width=Math.round(w*dpr); cv.height=Math.round(hh*dpr); }
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+      ctx.clearRect(0,0,w,hh);
+
+      var pct=Math.max(0,Math.min(100,parseFloat(cv.getAttribute("data-pct"))||0));
+      if(waterShown===null) waterShown=pct;
+      waterShown+=(pct-waterShown)*0.10;                 // ease toward the real level
+      if(Math.abs(pct-waterShown)<0.05) waterShown=pct;
+      var level=hh-(waterShown/100)*hh;
+
+      ctx.fillStyle=soft;
+      ctx.globalAlpha=1; ctx.fillRect(0,0,w,hh);
+
+      [[0.55,10,0.85,0],[0.32,14,1.25,Math.PI/2]].forEach(function(cfg){
+        var alpha=cfg[0],amp=cfg[1],speed=cfg[2],off=cfg[3];
+        ctx.beginPath(); ctx.moveTo(0,hh);
+        for(var x=0;x<=w;x+=4){
+          var y=level+Math.sin((x/w)*Math.PI*2.2+t*speed+off)*amp*(pct>2?1:0);
+          ctx.lineTo(x,y);
+        }
+        ctx.lineTo(w,hh); ctx.closePath();
+        ctx.globalAlpha=alpha; ctx.fillStyle=accent; ctx.fill();
+      });
+      ctx.globalAlpha=1;
+    });
+  }
+
+  if(!reduceMotion && typeof requestAnimationFrame==="function"){
+    (function loop(ts){ paintWater((ts||0)/1000); requestAnimationFrame(loop); })(0);
+  }
+
+  // ------------------------------------------------------------- actions
+  function find(id){
+    for(var i=0;i<state.routines.length;i++) if(state.routines[i].id===id) return state.routines[i];
+    return null;
+  }
+  function foodByName(n){
+    var all=allFoods();
+    for(var i=0;i<all.length;i++) if(all[i].n===n) return all[i];
+    return null;
+  }
+  function remember(n){
+    state.recents=[n].concat(state.recents.filter(function(x){return x!==n;})).slice(0,6);
+  }
+
+  // ---- Today → Routines -------------------------------------------------
+  //
+  // Routines already write into Today (ticking a water reminder logs its water). This is
+  // the other direction: doing the thing a reminder asks for satisfies the reminder, so
+  // the two screens can never disagree about what happened.
+  //
+  // Water is the delicate one. A manual "+250 ml" *converts* an overdue reminder into a
+  // tick rather than logging alongside it — adding both would count the same glass
+  // twice. Only the remainder reaches the manual pool, so the total is right either way.
+  function satisfyWater(ml){
+    state.waterManualMl+=ml;
+    // Convert against the running unattributed pool, not against this single tap. With
+    // a +100 ml button on the card, five taps make a 500 ml bottle — and they must
+    // satisfy a 500 ml reminder exactly as one +500 tap does, or the timeline shows a
+    // miss for water the user demonstrably drank.
+    //
+    // The invariant survives: converting moves `amount` out of the manual pool and adds
+    // one tick worth `amount`, so `manual + ticks × amount` is unchanged.
+    state.routines.forEach(function(r){
+      if(r.type!=="water"||!r.active||!r.amountMl||isPaused()||!dueOn(r,TODAY_DOW)) return;
+      r.times.forEach(function(t){
+        if(state.waterManualMl<r.amountMl||mins(t)>NOW||r.done.indexOf(t)>=0) return;
+        r.done.push(t); state.waterManualMl-=r.amountMl;
+      });
+      r.done.sort();
+    });
+  }
+
+  // A food routine is a reminder *to log*, so the act of logging satisfies it. Ticks the
+  // most recent reminder already due — never a future one, which the user has not
+  // reached yet.
+  function satisfyFood(){
+    state.routines.forEach(function(r){
+      if(r.type!=="food"||!r.active||isPaused()||!dueOn(r,TODAY_DOW)) return;
+      var due=r.times.filter(function(t){ return mins(t)<=NOW && r.done.indexOf(t)<0; });
+      if(due.length){ r.done.push(due[due.length-1]); r.done.sort(); }
+    });
+  }
+
+  stage.addEventListener("click",function(e){
+    var el=e.target.closest("[data-act]"); if(!el) return;
+    var act=el.getAttribute("data-act"), v=el.getAttribute("data-v");
+    var id=parseInt(el.getAttribute("data-id"),10), i=parseInt(el.getAttribute("data-i"),10);
+    var d=state.draft, f=state.food, r, fd;
+
+    switch(act){
+      // Prototype affordance: the two frames always show different screens, so
+      // navigating one never hides the other. Earlier this let both land on Routines
+      // and the Today card set — water included — disappeared entirely.
+      case "tab":
+        var p=el.getAttribute("data-phone");
+        state.tab[p]=v;
+        state.tab[p==="a"?"b":"a"]=(v==="today"?"routines":"today");
+        break;
+      case "water-arm": state.armedWater=parseInt(v,10); break;
+      case "water-cancel": state.armedWater=null; break;
+      case "water-commit":
+        satisfyWater(state.armedWater); state.armedWater=null; break;
+      case "weigh-open":
+        state.sheet="weight";
+        state.wDraft=Math.round(series.raw[TODAY_I]*10)/10;
+        state.sheetPhone=el.closest("[data-phone]").getAttribute("data-phone");
+        break;
+      case "w-range": state.wRange=v; break;
+      case "w-inc": state.wDraft=Math.round((state.wDraft+0.1)*10)/10; break;
+      case "w-dec": state.wDraft=Math.round((state.wDraft-0.1)*10)/10; break;
+      case "w-nudge": state.wDraft=Math.round((state.wDraft+parseFloat(v))*10)/10; break;
+      case "w-save":
+        // Record the raw entry and recompute today's trend point from it — exactly the
+        // time-aware EMA in §4.1, so the preview the sheet showed is what actually lands.
+        series.raw[TODAY_I]=state.wDraft;
+        series.trend[TODAY_I]=series.trend[TODAY_I-1]+0.25*(state.wDraft-series.trend[TODAY_I-1]);
+        state.loggedToday=true; state.sheet=null;
+        break;
+      case "go-routines": state.tab.a="routines"; state.tab.b="today"; break;
+
+      case "food-open":
+        state.sheet="food"; state.sheetPhone=el.closest("[data-phone]").getAttribute("data-phone");
+        f.pick=null; f.q=""; f.custom={name:"",kcal:"",open:false};
+        break;
+      case "f-pick":
+        fd=foodByName(v); if(fd){ f.pick=fd; f.qty=1; }
+        break;
+      case "f-back": f.pick=null; break;
+      case "q-inc": f.qty=Math.min(20,Math.round((f.qty+ (f.qty<2?0.5:1))*10)/10); break;
+      case "q-dec": f.qty=Math.max(0.5,Math.round((f.qty-(f.qty<=2?0.5:1))*10)/10); break;
+      case "f-add":
+        state.entries.push({n:f.pick.n,u:f.pick.u,q:f.qty,
+          k:Math.round(f.pick.k*f.qty),meal:mealFor(NOW)});
+        remember(f.pick.n); satisfyFood(); f.pick=null; state.sheet=null;
+        break;
+      case "copy-yest":
+        state.yesterdayEntries.forEach(function(e2){
+          state.entries.push({n:e2.n,u:e2.u,q:e2.q,k:e2.k,meal:e2.meal}); });
+        satisfyFood(); state.sheet=null;
+        break;
+      case "c-open": f.custom={name:f.q,kcal:"",open:true}; break;
+      case "c-cancel": f.custom.open=false; break;
+      case "c-save":
+        var kc=parseInt(f.custom.kcal,10)||0;
+        if(f.custom.name&&kc){
+          var item={n:f.custom.name,u:"1 serving",k:kc};
+          state.customFoods.unshift(item);
+          state.entries.push({n:item.n,u:item.u,q:1,k:kc,meal:mealFor(NOW)});
+          remember(item.n); satisfyFood();
+          f.custom={name:"",kcal:"",open:false}; state.sheet=null;
+        }
+        break;
+
+      case "done":
+        r=find(id); if(r&&r.done.indexOf(v)<0){ r.done.push(v); r.done.sort(); }
+        break;
+      case "untick": r=find(id); if(r) r.done=[]; break;
+      case "toggle": r=find(id); if(r) r.active=!r.active; break;
+
+      case "starter":
+        var tpl=draftFromType(v);
+        state.routines.push({id:nextId++,type:v,name:TYPES[v].tpl.name,message:TYPES[v].tpl.message,
+          times:tpl.times.slice(),days:tpl.days.slice(),amountMl:tpl.amountMl,
+          totalDays:30,elapsed:0,active:true,done:[],doneY:[]});
+        break;
+      case "new":
+        state.draft=draftFromType("water"); state.editingId=null;
+        state.tab.b="routines"; state.sheet="routine"; state.sheetPhone="b"; break;
+      case "edit":
+        r=find(id);
+        if(r){ state.draft=JSON.parse(JSON.stringify(r)); state.editingId=id;
+               state.sheet="routine"; state.sheetPhone=el.closest("[data-phone]").getAttribute("data-phone"); }
+        break;
+      case "hist-open":
+        state.sheet="history"; state.histDay=null;
+        state.sheetPhone=el.closest("[data-phone]").getAttribute("data-phone");
+        break;
+      case "settings-open":
+        state.sheet="settings";
+        state.sheetPhone=el.closest("[data-phone]").getAttribute("data-phone");
+        break;
+      case "s-goal":
+        state.goal={kind:v,kgPerWeek:state.goal.kgPerWeek||0.5}; break;
+      case "s-rate": state.goal={kind:state.goal.kind,kgPerWeek:parseFloat(v)}; break;
+      case "s-theme": state.theme=v; applyTheme(); break;
+      case "s-variant": state.profile.variant=v; break;
+      case "s-activity": state.profile.activity=v; break;
+
+      case "h-range": state.histRange=parseInt(v,10); break;
+      case "h-day": state.histDay=parseInt(v,10); break;
+      case "h-back": state.histDay=null; break;
+
+      case "close": state.sheet=null; state.histDay=null; break;
+      case "del":
+        state.routines=state.routines.filter(function(x){return x.id!==id;});
+        state.sheet=null; state.editingId=null; break;
+      case "save":
+        if(state.editingId!==null){
+          r=find(state.editingId);
+          if(r){ ["type","name","message","times","days","amountMl","totalDays"].forEach(function(k){ r[k]=d[k]; });
+                 if(!r.name) r.name=TYPES[r.type].label+" reminder";
+                 r.done=r.done.filter(function(t){ return r.times.indexOf(t)>=0; }); }
+        }else{
+          state.routines.push({id:nextId++,type:d.type,
+            name:d.name||(TYPES[d.type].label==="Custom"?"Untitled routine":TYPES[d.type].label+" reminder"),
+            message:d.message||"Time for this.",times:d.times.slice(),days:d.days.slice(),
+            amountMl:d.amountMl,totalDays:d.totalDays,elapsed:0,active:true,done:[],doneY:[]});
+        }
+        state.sheet=null; state.editingId=null; break;
+
+      case "pause-all": state.sheet="pause"; state.sheetPhone="b"; state.tab.b="routines"; break;
+      case "resume-all": state.pauseUntil=null; break;
+      case "pause-for":
+        var m=parseInt(v,10);
+        state.pauseUntil=m===-1?-1:m===-2?1440:NOW+m; state.sheet=null; break;
+
+      case "d-type":
+        if(state.editingId===null) state.draft=draftFromType(v); else d.type=v; break;
+      case "d-day":
+        var nn=parseInt(v,10), at=d.days.indexOf(nn);
+        if(at>=0){ if(d.days.length>1) d.days.splice(at,1); } else { d.days.push(nn); d.days.sort(); }
+        break;
+      case "t-add":
+        d.times.push(clock(Math.min(1380,mins(d.times[d.times.length-1]||"09:00")+120))); d.times.sort(); break;
+      case "t-del": if(d.times.length>1) d.times.splice(i,1); break;
+      default: return;
+    }
+    render();
+  });
+
+  stage.addEventListener("input",function(e){
+    var el=e.target.closest("[data-act]"); if(!el) return;
+    var act=el.getAttribute("data-act"), d=state.draft, f=state.food;
+
+    if(act==="f-q"){ f.q=el.value; render(); return; }
+    if(act==="s-height"){ state.profile.heightCm=parseInt(el.value,10)||175; return; }
+    if(act==="s-year"){ state.profile.birthYear=parseInt(el.value,10)||1994; return; }
+    if(act==="s-weigh"){ state.weighAt=el.value||state.weighAt; return; }
+    if(act==="s-qfrom"){ state.quietFrom=el.value||state.quietFrom; return; }
+    if(act==="s-qto"){ state.quietTo=el.value||state.quietTo; return; }
+    if(act==="c-name"){ f.custom.name=el.value; return; }
+    if(act==="c-kcal"){ f.custom.kcal=el.value; return; }
+    if(!d) return;
+    if(act==="d-name"){ d.name=el.value; soft(); }
+    else if(act==="d-msg"){ d.message=el.value; soft(); }
+    else if(act==="d-ml"){ d.amountMl=Math.max(0,parseInt(el.value,10)||0); soft(); softCoverage(); }
+    else if(act==="d-total"){ d.totalDays=Math.max(1,Math.min(365,parseInt(el.value,10)||1)); }
+    else if(act==="d-time"){
+      var i=parseInt(el.getAttribute("data-i"),10);
+      if(el.value){ d.times[i]=el.value; softLoad(); }
+    }
+  });
+
+  // Typing updates the preview in place; a full re-render would steal focus mid-keystroke.
+  function soft(){
+    var d=state.draft,t=TYPES[d.type],s=stage.querySelector(".sheet");
+    if(!s||!s.querySelector||!s.querySelector(".preview-title")) return;
+    s.querySelector(".preview-title").textContent=d.name||(t.label==="Custom"?"Your routine":t.label+" reminder");
+    s.querySelector(".preview-body").textContent=(d.message||"Your own words appear here.")+
+      (d.type==="water"&&d.amountMl?" Marking done logs "+d.amountMl+" ml.":"");
+  }
+  function softCoverage(){
+    var s=stage.querySelector(".sheet");
+    if(!s||!s.querySelector||!state.draft||state.draft.type!=="water") return;
+    var el=s.querySelector(".load.cov");
+    if(el) el.outerHTML=coverage(state.draft);
+  }
+  function softLoad(){
+    var d=state.draft,s=stage.querySelector(".sheet");
+    if(!s||!s.querySelector||!s.querySelector(".load.den")) return;
+    var n=d.times.length,wk=n*d.days.length,heavy=n>6,load=s.querySelector(".load.den");
+    load.className="load den"+(heavy?" heavy":"");
+    load.innerHTML=(heavy?svg(I.info,1.6):"")+'<span><span class="num">'+n+
+      '</span> a day, <span class="num">'+wk+'</span> a week'+
+      (heavy?' — dense enough that people usually mute it.':'.')+'</span>';
+  }
+
+  // ------------------------------------------------------------- lock screen
+  function settle(t,b,msg){
+    document.getElementById(b).textContent=msg;
+    document.getElementById(t).setAttribute("data-done","true");
+  }
+  document.getElementById("water-done").addEventListener("click",function(){
+    var r=find(1); if(r&&r.done.indexOf("11:00")<0){ r.done.push("11:00"); r.done.sort(); render(); }
+    settle("toast-water","water-body","Done — 500 ml logged on Today. You never enter the same bottle twice.");
+  });
+  document.getElementById("water-snooze").addEventListener("click",function(){
+    settle("toast-water","water-body","Back at 11:30. Counts as one reminder, not two."); });
+  document.getElementById("water-skip").addEventListener("click",function(){
+    settle("toast-water","water-body","Skipped, nothing logged. It shows as a ring on the timeline."); });
+  document.getElementById("gym-done").addEventListener("click",function(){
+    var r=find(2); if(r&&r.done.indexOf("18:30")<0){ r.done.push("18:30");
+      r.elapsed=Math.min(r.totalDays,r.elapsed+1); render(); }
+    settle("toast-gym","gym-body","Marked done. No calories credited — a gym tick moves the streak, never the energy math.");
+  });
+  document.getElementById("gym-snooze").addEventListener("click",function(){
+    settle("toast-gym","gym-body","Back at 19:00."); });
+  document.getElementById("gym-skip").addEventListener("click",function(){
+    settle("toast-gym","gym-body","Skipped. Three in a row and TrueBurn asks whether to retire this routine."); });
+
+  var FULL_ROUTINES=JSON.parse(JSON.stringify(state.routines));
+  var FULL_ENTRIES=JSON.parse(JSON.stringify(state.entries));
+
+  function setStage(st){
+    state.stage=st;
+    state.sheet=null; state.histDay=null; state.armedWater=null;
+    if(st==="day1"){
+      state.routines=[]; state.entries=[]; state.waterManualMl=0;
+      state.profileSet=false; state.loggedToday=false;
+    }else if(st==="building"){
+      state.routines=JSON.parse(JSON.stringify(FULL_ROUTINES)).slice(0,2)
+        .map(function(r){ r.elapsed=Math.min(r.elapsed,10); return r; });
+      state.entries=JSON.parse(JSON.stringify(FULL_ENTRIES)).slice(0,3);
+      state.waterManualMl=400; state.profileSet=true; state.loggedToday=true;
+    }else{
+      state.routines=JSON.parse(JSON.stringify(FULL_ROUTINES));
+      state.entries=JSON.parse(JSON.stringify(FULL_ENTRIES));
+      state.waterManualMl=400; state.profileSet=true; state.loggedToday=false;
+    }
+    render();
+  }
+
+  var picker=document.getElementById("stagepick");
+  if(picker&&picker.addEventListener) picker.addEventListener("click",function(e){
+    var el=e.target.closest("[data-stage]"); if(!el) return;
+    Array.prototype.forEach.call(picker.querySelectorAll("[data-stage]"),function(b){
+      b.setAttribute("aria-pressed", b===el ? "true" : "false"); });
+    setStage(el.getAttribute("data-stage"));
+  });
+
+  render();
+
+  // Drop the intro class once the opening reveal has played, so every later render is
+  // instant. Guarded for the headless harness, which has no timers worth waiting on.
+  if(typeof setTimeout==="function"){
+    setTimeout(function(){ state.intro=false; if(stage.className) stage.className="stage"; }, 1400);
+  }
+})();
+</script>
