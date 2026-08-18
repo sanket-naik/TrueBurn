@@ -63,8 +63,7 @@ List<List<DayCell>> weekCells(List<Routine> routines, String today, int todayDow
       // the times shifts old bars; keeping a full per-day log to avoid that costs more
       // than the distortion is worth.
       final total = r.times.length;
-      return DayCell(
-          CellKind.tracked, total == 0 ? 0 : (done / total).clamp(0, 1), false);
+      return DayCell(CellKind.tracked, total == 0 ? 0 : (done / total).clamp(0, 1), false);
     });
   }).toList();
 }
@@ -94,8 +93,9 @@ class WeekGrid extends StatelessWidget {
     final cells = weekCells(active, today, todayDow);
     // Nothing but today to show yet. Every new user spends their first week here, so it
     // gets a sentence rather than six columns of grey that read as six days skipped.
-    final hasPast = cells.any((row) =>
-        row.take(6).any((cell) => cell.kind == CellKind.tracked));
+    final hasPast = cells.any(
+      (row) => row.take(6).any((cell) => cell.kind == CellKind.tracked),
+    );
 
     final todayNum = dayNumber(today);
     final labels = List.generate(7, (i) {
@@ -111,7 +111,7 @@ class WeekGrid extends StatelessWidget {
             _row(
               c,
               SizedBox(
-                width: 58,
+                width: 52,
                 child: Text(
                   (active[r].type == RoutineType.custom
                           ? active[r].name
@@ -119,41 +119,44 @@ class WeekGrid extends StatelessWidget {
                       .toUpperCase(),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: labelStyle(c),
+                  // Lighter than the data it labels. It used to compete with it.
+                  style: labelStyle(c).copyWith(color: c.ink3),
                 ),
               ),
               (i) => _Cell(cells[r][i]),
             ),
-            if (r != active.length - 1) const SizedBox(height: 7),
+            if (r != active.length - 1) const SizedBox(height: 6),
           ],
-          const SizedBox(height: 7),
+          const SizedBox(height: 8),
           _row(
             c,
-            SizedBox(
-              width: 58,
-              child: Text('7 DAYS',
-                  style: labelStyle(c).copyWith(color: c.ink3, fontSize: 9.5)),
-            ),
+            const SizedBox(width: 52),
             (i) => Center(
               child: Text(
                 labels[i],
-                style: mono(c,
-                    size: 9.5,
-                    color: i == 6 ? c.ink2 : c.ink3,
-                    weight: i == 6 ? FontWeight.w700 : FontWeight.w500),
+                style: mono(
+                  c,
+                  size: 9.5,
+                  color: i == 6 ? c.ink2 : c.ink3,
+                  weight: i == 6 ? FontWeight.w700 : FontWeight.w500,
+                ),
               ),
             ),
           ),
-          const SizedBox(height: 11),
-          Row(children: [
-            Expanded(
-              child: hasPast
-                  ? _fillKey(c)
-                  : Text('Fills in from tomorrow',
-                      style: sans(c, size: 11, color: c.ink3)),
-            ),
-            if (trailing != null) ...[const SizedBox(width: 8), trailing!],
-          ]),
+          const SizedBox(height: 13),
+          Row(
+            children: [
+              Expanded(
+                child: hasPast
+                    ? _fillKey(c)
+                    : Text(
+                        'Last 7 days · fills in from tomorrow',
+                        style: sans(c, size: 11, color: c.ink3),
+                      ),
+              ),
+              if (trailing != null) ...[const SizedBox(width: 8), trailing!],
+            ],
+          ),
         ],
       ),
     );
@@ -161,34 +164,39 @@ class WeekGrid extends StatelessWidget {
 
   /// Gutter plus seven equal columns — the day labels have to land under their cells,
   /// so both rows are built by the same function.
-  Widget _row(Palette c, Widget gutter, Widget Function(int) cell) => Row(children: [
-        gutter,
-        for (var i = 0; i < 7; i++) ...[
-          Expanded(child: cell(i)),
-          if (i != 6) const SizedBox(width: 6),
-        ],
-      ]);
+  Widget _row(Palette c, Widget gutter, Widget Function(int) cell) => Row(
+    children: [
+      gutter,
+      for (var i = 0; i < 7; i++) ...[
+        Expanded(child: cell(i)),
+        if (i != 6) const SizedBox(width: 5),
+      ],
+    ],
+  );
 
   /// A depth ramp, not a colour legend — the cells encode "how much of the day", so the
   /// key has to show the same thing.
-  Widget _fillKey(Palette c) => Row(mainAxisSize: MainAxisSize.min, children: [
-        Text('none', style: sans(c, size: 10.5, color: c.ink3)),
-        const SizedBox(width: 5),
-        for (final a in const [0.0, 0.35, 0.7, 1.0]) ...[
-          Container(
-            width: 15,
-            height: 10,
-            decoration: BoxDecoration(
-              color: _fill(c, a),
-              borderRadius: BorderRadius.circular(3),
-              border: a == 0 ? Border.all(color: c.line) : null,
-            ),
+  Widget _fillKey(Palette c) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Text('7 days · none', style: sans(c, size: 10.5, color: c.ink3)),
+      const SizedBox(width: 6),
+      for (final a in const [0.0, 0.35, 0.7, 1.0]) ...[
+        Container(
+          width: 14,
+          height: 9,
+          decoration: BoxDecoration(
+            color: _fill(c, a),
+            borderRadius: BorderRadius.circular(3),
+            border: a == 0 ? Border.all(color: c.line) : null,
           ),
-          const SizedBox(width: 3),
-        ],
-        const SizedBox(width: 2),
-        Text('all', style: sans(c, size: 10.5, color: c.ink3)),
-      ]);
+        ),
+        const SizedBox(width: 3),
+      ],
+      const SizedBox(width: 2),
+      Text('all', style: sans(c, size: 10.5, color: c.ink3)),
+    ],
+  );
 }
 
 /// Depth of fill *is* the reading — a heatmap, not a pass/fail badge, so a half-done day
@@ -209,22 +217,14 @@ class _Cell extends StatelessWidget {
       final off = cell.kind == CellKind.off;
       return Semantics(
         label: '${today ? 'Today' : 'Day'}, ${off ? 'not scheduled' : 'no record'}',
-        child: Container(
-          height: 26,
-          decoration: BoxDecoration(
-            // Rest days recede to a dash. Unknown days keep an outline but no fill —
-            // a hole in the row, deliberately unlike the filled-but-empty box that
-            // means "recorded, nothing done".
-            color: Colors.transparent,
-            borderRadius: BorderRadius.circular(7),
-            border: off
-                ? null
-                : Border.all(color: c.line.withValues(alpha: 0.75)),
-          ),
+        child: SizedBox(
+          height: 24,
           child: off
+              // A rest day is not a slot at all — a hairline where the cell would be,
+              // and nothing else. An outlined box here read as a failed day.
               ? Center(
                   child: Container(
-                    width: 10,
+                    width: 9,
                     height: 1.5,
                     decoration: BoxDecoration(
                       color: c.line,
@@ -232,7 +232,27 @@ class _Cell extends StatelessWidget {
                     ),
                   ),
                 )
-              : null,
+              // No record: a faint track, no border. Twelve outlined boxes carried more
+              // weight than the data did, which is backwards — an absence should be the
+              // quietest thing on the card.
+              : Container(
+                  decoration: BoxDecoration(
+                    color: c.sunken.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: today
+                      ? Center(
+                          child: Container(
+                            width: 4,
+                            height: 4,
+                            decoration: BoxDecoration(
+                              color: c.ink3.withValues(alpha: 0.5),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        )
+                      : null,
+                ),
         ),
       );
     }
@@ -243,12 +263,12 @@ class _Cell extends StatelessWidget {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 260),
         curve: Curves.easeOut,
-        height: 26,
+        height: 24,
         decoration: BoxDecoration(
           color: _fill(c, cell.ratio),
-          borderRadius: BorderRadius.circular(7),
+          borderRadius: BorderRadius.circular(6),
           border: today
-              ? Border.all(color: c.accent, width: 1.6)
+              ? Border.all(color: c.accent, width: 1.4)
               : (cell.ratio == 0 ? Border.all(color: c.line) : null),
         ),
       ),

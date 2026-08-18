@@ -318,6 +318,79 @@ class SegControl<T> extends StatelessWidget {
 }
 
 /// Bottom sheet with the app's own chrome rather than Material's default.
+/// Swap one piece of UI for another with a short slide-and-fade rather than a hard cut.
+///
+/// The direction is derived from the key, so the outgoing and incoming halves travel
+/// the same way and it reads as a push rather than a crossfade in place: pass
+/// `forward: true` for the child that represents going deeper (a confirmation, a next
+/// step) and it enters from the right while the one it replaces leaves to the left.
+///
+/// Heights should match between the two children — this stacks them during the
+/// transition, so a large height difference will jump. Use [SmoothReveal] for that.
+class SmoothSwap extends StatelessWidget {
+  final Widget child;
+
+  /// Identifies the child, and decides which way it travels.
+  final bool forward;
+
+  final Duration duration;
+
+  const SmoothSwap({
+    super.key,
+    required this.child,
+    required this.forward,
+    this.duration = const Duration(milliseconds: 260),
+  });
+
+  @override
+  Widget build(BuildContext context) => AnimatedSwitcher(
+        duration: duration,
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInCubic,
+        transitionBuilder: (child, anim) {
+          final dir = (child.key == ValueKey(forward)) == forward ? 0.07 : -0.07;
+          return FadeTransition(
+            opacity: anim,
+            child: SlideTransition(
+              position: Tween<Offset>(begin: Offset(dir, 0), end: Offset.zero)
+                  .animate(anim),
+              child: child,
+            ),
+          );
+        },
+        child: KeyedSubtree(key: ValueKey(forward), child: child),
+      );
+}
+
+/// Show or hide something with its height animating rather than snapping.
+///
+/// For the cases [SmoothSwap] cannot cover: a warning that appears, a control that
+/// becomes irrelevant. The card grows into it instead of the rest of the page jumping.
+class SmoothReveal extends StatelessWidget {
+  final bool visible;
+  final Widget child;
+  final Duration duration;
+
+  const SmoothReveal({
+    super.key,
+    required this.visible,
+    required this.child,
+    this.duration = const Duration(milliseconds: 240),
+  });
+
+  @override
+  Widget build(BuildContext context) => AnimatedSize(
+        duration: duration,
+        curve: Curves.easeOutCubic,
+        alignment: Alignment.topCenter,
+        child: AnimatedOpacity(
+          opacity: visible ? 1 : 0,
+          duration: duration,
+          child: visible ? child : const SizedBox(width: double.infinity),
+        ),
+      );
+}
+
 Future<T?> showAppSheet<T>(BuildContext context, WidgetBuilder builder,
     {WidgetBuilder? footer}) {
   final c = AppTheme.of(context);

@@ -20,9 +20,17 @@ Regenerate with `python3 tool/gen_icons.py` — see **Icons** below.
 
 ## Naming
 
-Shipping name is **TrueBurn**; the engine and docs still say "TrueBurn" in places, which
-was the working name. The Android `applicationId` is `com.sanketnaik.trueburn` — changed
-before first release, because that identifier is permanent once a build reaches Play.
+Shipping name is **TrueBurn**. Both platforms use `com.funnudge.trueburn` — Android's
+`applicationId` and namespace, and the iOS bundle identifier — matching the studio
+domain. They were briefly split (`com.sanketnaik` on Android, `com.funnudge` on iOS)
+and were aligned deliberately rather than left to drift, because Play's `applicationId`
+is permanent the moment a build reaches it.
+
+Renaming Android touched the Gradle namespace, the `applicationId`, and the Kotlin
+package plus its directory. It did **not** touch the manifest: `.MainActivity` is
+relative to the namespace and the three notification receivers are absolute
+`com.dexterous.*` names, which is the only reason this was a safe rename — a half-done
+one breaks those receivers silently.
 
 Studio credit on the splash is **FunNudge** (capital F, capital N, matching funnudge.com).
 
@@ -171,8 +179,7 @@ flutter run
 ```
 
 Signing is only needed for a physical device: open `ios/Runner.xcworkspace`, Runner →
-Signing & Capabilities → Team. Bundle id is already `com.sanketnaik.trueburn`, matching
-Android.
+Signing & Capabilities → Team. Bundle id is `com.funnudge.trueburn` on both platforms.
 
 ### The 64-notification cap
 
@@ -237,7 +244,8 @@ reproduced by hand.
 python3 tool/gen_icons.py
 ```
 
-It emits: the 19-entry iOS `AppIcon.appiconset` (opaque, no alpha — iOS rejects icons
+It emits: the two Android splash marks (natural and v31-padded, light and night, five
+densities each), the 19-entry iOS `AppIcon.appiconset` (opaque, no alpha — iOS rejects icons
 with transparency at upload), Android legacy launcher icons, the adaptive foreground,
 the white notification silhouette, iOS `LaunchImage` at 1x/2x/3x, and a 1024 master.
 
@@ -305,6 +313,52 @@ Things that only became visible on a real screen, and what they turned into:
   reads as instrument output rather than as a fallback.
 - **Overscroll stretch is off.** Android's default warps the whole page at the ends,
   which on a card layout reads as the UI breaking rather than as feedback.
+- **Absence should be the quietest thing on screen.** The same mistake appeared three
+  times and was fixed the same way each time: the week grid drew twelve outlined boxes
+  for days with *no record*, so an absence carried more weight than the one day that
+  was completed; the routine editor drew six full-width buttons for six times, each
+  with its own delete button, pushing Days and Save below the fold; and the day picker
+  drew seven bordered boxes, giving a routine's schedule more prominence than anything
+  it reports. Empty states are now faint fills with no border, times are chips that
+  flow two to a line, and days are solid-vs-quiet circles with no borders at all. The
+  editor went from needing a scroll to fitting on one screen.
+
+- **State changes move, they do not cut.** Two shared primitives in `primitives.dart`:
+  `SmoothSwap` slides and fades one control past another (the water card's amounts
+  becoming "Add 250 ml?", a routine's Tick button becoming "All done today"), deriving
+  direction from the key so it reads as a push rather than a crossfade in place;
+  `SmoothReveal` animates height for things that appear (the weigh-in out-of-range
+  warning, the goal-rate row when you leave Maintain) so the panel grows instead of the
+  page jumping under your finger.
+
+  Verified by temporarily stretching the duration to 2200ms and screenshotting
+  mid-flight — at 260ms no screenshot can catch it, and "it looks instant" is exactly
+  what a hard cut also looks like.
+
+- **The splash is one screen, not two.** There are unavoidably two — the OS launch
+  screen while the engine boots, then the Flutter one — and the app used to make that
+  obvious: the mark jumped size *and* position, then text appeared. Fixed on three
+  fronts. The mark is 108dp and screen-centred on both sides. The wordmark is
+  positioned *beneath* the centred mark rather than laid out under it in a Column, so
+  arriving text cannot shift the mark. And the hold went 1100ms to 1900ms, because at
+  1100 the tagline faded in and was gone inside a blink.
+
+  Verified by measuring the mark in screenshots of each phase:
+
+  | | native launch | Flutter splash |
+  |---|---|---|
+  | Android | 120x198px, centre y=1201 | 120x198px, centre y=1201 |
+  | iOS | 138x226px, centre y=1311 | 138x226px, centre y=1311 |
+
+- **Android 12+ ignores `windowBackground` entirely**, which is the trap underneath
+  that. It uses `windowSplashScreenAnimatedIcon` and **scales whatever drawable it is
+  given to fill its own icon window**, so the bitmap's pixel size is irrelevant and the
+  only way to control apparent size is padding inside the image. Measured at ~273dp on
+  a 420dpi device. The mark therefore ships twice: natural size in `drawable-<density>/`
+  for pre-12's centred bitmap, and padded to `scale_mark=0.38` in
+  `drawable-<density>-v31/` for the icon window. Getting this wrong made the mark jump
+  2.5x, and no amount of correcting the bitmap's resolution would have fixed it.
+
 - **Sparse data gets a designed state, not a gap.** One weigh-in cannot make a trend, so
   the weight card shows the figure, a dashed continuation, and the reason — rather than
   an empty 92px chart slot that looks like a failed component. Same principle as the

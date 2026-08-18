@@ -392,36 +392,53 @@ class _TodayScreenState extends State<TodayScreen> {
                   : 'no target until you weigh in',
                   style: sans(c, size: 12.5)),
               if (fromRoutines > 0)
-                Num('$fromRoutines ml from reminders', size: 12, color: c.accent),
+                // Appears the instant a reminder is ticked, often while the card is
+                // being looked at.
+                TweenAnimationBuilder<double>(
+                  key: ValueKey(fromRoutines),
+                  tween: Tween(begin: 0, end: 1),
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeOut,
+                  builder: (ctx, t, child) => Opacity(opacity: t, child: child),
+                  child: Num('$fromRoutines ml from reminders',
+                      size: 12, color: c.accent),
+                ),
             ]),
             const SizedBox(height: 12),
             // Two-tap add: the first arms, the second commits. A stray tap on a card
             // scrolled past several times a day should not silently rewrite the log.
-            if (_armed != null)
-              Row(children: [
-                Expanded(
-                  child: Pill(
-                    'Add ${_armed! >= 1000 ? '${_armed! ~/ 1000} L' : '$_armed ml'}?',
-                    tone: c.accent,
-                    onTap: () {
-                      s.addWater(_armed!);
-                      setState(() => _armed = null);
-                    },
-                  ),
-                ),
-                const SizedBox(width: 7),
-                Pill('Cancel', onTap: () => setState(() => _armed = null)),
-              ])
-            else
-              Row(children: [
-                for (final v in const [100, 250, 500, 1000]) ...[
-                  Expanded(
-                    child: Pill('+${v >= 1000 ? '${v ~/ 1000} L' : v}',
-                        monoFont: true, onTap: () => setState(() => _armed = v)),
-                  ),
-                  if (v != 1000) const SizedBox(width: 6),
-                ],
-              ]),
+            //
+            // The two rows are the same height, so they slide past each other rather
+            // than cutting: arming pushes the amounts out to the left and brings the
+            // confirmation in from the right, and cancelling reverses it. A hard swap
+            // here read as the card flickering.
+            SmoothSwap(
+              forward: _armed != null,
+              child: _armed != null
+                  ? Row(children: [
+                      Expanded(
+                        child: Pill(
+                          'Add ${_armed! >= 1000 ? '${_armed! ~/ 1000} L' : '$_armed ml'}?',
+                          tone: c.accent,
+                          onTap: () {
+                            s.addWater(_armed!);
+                            setState(() => _armed = null);
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 7),
+                      Pill('Cancel', onTap: () => setState(() => _armed = null)),
+                    ])
+                  : Row(children: [
+                      for (final v in const [100, 250, 500, 1000]) ...[
+                        Expanded(
+                          child: Pill('+${v >= 1000 ? '${v ~/ 1000} L' : v}',
+                              monoFont: true, onTap: () => setState(() => _armed = v)),
+                        ),
+                        if (v != 1000) const SizedBox(width: 6),
+                      ],
+                    ]),
+            ),
           ]),
         ),
       ]),
