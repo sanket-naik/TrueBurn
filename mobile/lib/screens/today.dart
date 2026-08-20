@@ -5,6 +5,7 @@ import '../core/tdee.dart';
 import '../core/weight_trend.dart';
 import '../domain/clock.dart';
 import '../domain/foods.dart';
+import '../domain/insights.dart';
 import '../sheets/history.dart';
 import '../sheets/sheets.dart';
 import '../store.dart';
@@ -129,6 +130,7 @@ class _TodayScreenState extends State<TodayScreen> {
 
   // ------------------------------------------------------------- normal
   List<Widget> _normal(Palette c, dynamic report) {
+    final drift = s.drift();
     final tdee = report.energy.tdee as TdeeResult;
     final target = report.energy.target.kcal as double?;
     final consumed = s.consumedKcal(report.date as String);
@@ -142,17 +144,24 @@ class _TodayScreenState extends State<TodayScreen> {
       TdeeMode.formula => 'Estimated',
     };
 
+    // `.abs()` on the headline used to hide the sign, so 720 kcal *over* read exactly
+    // like 720 kcal *left* — the same digits under the same label, on the number the
+    // whole screen exists to communicate. The meter already knew; the headline did not.
+    final over = target != null && consumed > target;
+
     return [
       Panel(
+        borderColor: over ? c.warn.withValues(alpha: 0.5) : null,
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Label('Left to eat'),
+                Label(over ? 'Over by' : 'Left to eat'),
                 const SizedBox(height: 6),
                 Num(
                   target == null ? '—' : (target - consumed).abs().round().toString(),
                   size: 44,
+                  color: over ? c.warn : null,
                 ),
               ]),
             ),
@@ -214,6 +223,10 @@ class _TodayScreenState extends State<TodayScreen> {
           ]),
         ),
       ],
+      if (drift.kind != DriftKind.none) ...[
+        const SizedBox(height: 18),
+        _driftCard(c, drift),
+      ],
       const SizedBox(height: 18),
       _weightCard(c, trend, report),
       const SizedBox(height: 18),
@@ -221,6 +234,59 @@ class _TodayScreenState extends State<TodayScreen> {
       const SizedBox(height: 18),
       _waterCard(c, report.water.targetMl as int? ?? 2500),
     ];
+  }
+
+  /// The one thing TrueBurn can say that a calorie counter cannot.
+  ///
+  /// It is the only app holding both numbers — what the food log predicted, and what the
+  /// scale actually did — so it is the only one that can notice they disagree. §10.5
+  /// documents the failure this catches: intake that is systematically under-recorded
+  /// biases the measurement downward and makes the app over-restrict, quietly, for as
+  /// long as nobody notices.
+  ///
+  /// Worded as an observation about the *log*, never about the person. §6 rule 4 rules
+  /// out the guilt framing, and it would be wrong anyway — under-recording is the normal
+  /// human default, not a character flaw, and the fix is mechanical.
+  Widget _driftCard(Palette c, LogDrift drift) {
+    final under = drift.kind == DriftKind.underLogging;
+    final pct = (drift.share * 100).round();
+    final kcal = drift.kcalPerDay.round();
+
+    return Panel(
+      borderColor: c.warn.withValues(alpha: 0.45),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Icon(Icons.compare_arrows_rounded, size: 16, color: c.warn),
+          const SizedBox(width: 7),
+          Text(
+            under ? 'BURN IS LOWER THAN EXPECTED' : 'BURN IS HIGHER THAN EXPECTED',
+            style: labelStyle(c).copyWith(color: c.warn),
+          ),
+        ]),
+        const SizedBox(height: 10),
+        Text(
+          under
+              ? 'Your measured burn is about $kcal kcal a day below what your height, '
+                  'weight and age predict — $pct% lower.'
+              : 'Your measured burn is about $kcal kcal a day above what your height, '
+                  'weight and age predict — $pct% higher.',
+          style: sans(c, size: 13.5, color: c.ink).copyWith(height: 1.45),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          under
+              ? 'A gap that size almost always means food is going unrecorded — oils, '
+                  'drinks and the bites that never feel like a meal. That is the normal '
+                  'human default, not a failing. It matters because TrueBurn measures '
+                  'your burn from what you log, so the gap makes your target stricter '
+                  'than it needs to be.'
+              : 'That can simply be a fast metabolism or an active job, in which case '
+                  'nothing is wrong. It can also mean portions were logged larger than '
+                  'they were.',
+          style: sans(c, size: 12.5, color: c.ink3).copyWith(height: 1.45),
+        ),
+      ]),
+    );
   }
 
   Widget _weightCard(Palette c, List<TrendPoint> trend, dynamic report) {
@@ -376,6 +442,14 @@ class _TodayScreenState extends State<TodayScreen> {
     return Container(
       decoration: BoxDecoration(
         color: c.surface,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      // The border is a *foreground* decoration, painted after the child. As a normal
+      // decoration it is drawn first and then the antialiased clip trims the child
+      // right over it, which nibbled the stroke away at the top two corners where the
+      // wave reaches the edge. Every other card gets away with a plain border because
+      // nothing in it paints to the boundary.
+      foregroundDecoration: BoxDecoration(
         border: Border.all(color: c.line),
         borderRadius: BorderRadius.circular(14),
       ),

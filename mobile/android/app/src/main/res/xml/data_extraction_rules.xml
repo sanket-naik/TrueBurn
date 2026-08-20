@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 12+ splits backup into two things that deserve the same answer here:
+
+    cloud-backup    the user's own Google Drive — what makes a new phone keep history
+    device-transfer phone-to-phone during setup
+
+  Same exclusions as backup_rules.xml, and for the same reason: the notification
+  plugin's state is about one device's alarms and does not travel.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <include domain="sharedpref" path="." />
+        <exclude domain="sharedpref" path="flutter_local_notifications_plugin.xml" />
+        <exclude domain="sharedpref" path="notification_plugin_cache.xml" />
+        <exclude domain="sharedpref" path="scheduled_notifications.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <include domain="sharedpref" path="." />
+        <exclude domain="sharedpref" path="flutter_local_notifications_plugin.xml" />
+        <exclude domain="sharedpref" path="notification_plugin_cache.xml" />
+        <exclude domain="sharedpref" path="scheduled_notifications.xml" />
+    </device-transfer>
+</data-extraction-rules>

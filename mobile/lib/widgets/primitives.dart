@@ -391,8 +391,12 @@ class SmoothReveal extends StatelessWidget {
       );
 }
 
+/// [scrollable] false hands the child a **bounded** box instead of wrapping it in a
+/// scroll view, so a sheet with a long list can own a lazy `ListView.builder` rather
+/// than having every row built eagerly inside someone else's `SingleChildScrollView`.
+/// Nesting the two is also the bug that once made settings completely unscrollable.
 Future<T?> showAppSheet<T>(BuildContext context, WidgetBuilder builder,
-    {WidgetBuilder? footer}) {
+    {WidgetBuilder? footer, bool scrollable = true}) {
   final c = AppTheme.of(context);
   return showModalBottomSheet<T>(
     context: context,
@@ -417,7 +421,11 @@ Future<T?> showAppSheet<T>(BuildContext context, WidgetBuilder builder,
                   height: 4,
                   decoration: BoxDecoration(
                       color: c.line, borderRadius: BorderRadius.circular(2))),
-              Flexible(child: SingleChildScrollView(child: builder(ctx))),
+              Flexible(
+                child: scrollable
+                    ? SingleChildScrollView(child: builder(ctx))
+                    : builder(ctx),
+              ),
               // Pinned: "Add your own food" sat below seventy list items, so reaching it
               // meant scrolling the entire catalogue.
               if (footer != null)

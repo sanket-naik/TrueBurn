@@ -14,6 +14,8 @@ library;
 
 import 'dart:io' show Platform;
 
+import 'package:flutter/foundation.dart' show debugPrint;
+
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -87,7 +89,25 @@ void _onForegroundResponse(NotificationResponse r) {
 class Notifications {
   static bool _ready = false;
 
+  /// Set up notifications, or give up quietly.
+  ///
+  /// Everything in here is best-effort on purpose: reminders are a feature, but weight
+  /// and food tracking are the product, and neither needs a notification channel. An
+  /// unhandled throw here propagates into `_boot`, which then never completes and
+  /// leaves the app on its splash screen forever — which is exactly what a stripped
+  /// notification icon did in release. A tracker that cannot remind you is degraded; a
+  /// tracker that will not open is broken.
   static Future<void> init() async {
+    try {
+      await _init();
+    } catch (e) {
+      // Deliberately swallowed. `_ready` stays false, so every scheduling call becomes
+      // a no-op and the rest of the app carries on.
+      debugPrint('Notifications unavailable: $e');
+    }
+  }
+
+  static Future<void> _init() async {
     if (_ready) return;
 
     tzdata.initializeTimeZones();

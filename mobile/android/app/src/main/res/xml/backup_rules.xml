@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 11 and below (Auto Backup). What survives a reinstall or a new phone.
+
+  `FlutterSharedPreferences.xml` holds everything the user has ever logged — weigh-ins,
+  food, water, routines — and it is small: 35 days is about 46 KB, a year well under
+  1 MB, against Auto Backup's 25 MB ceiling.
+
+  The notification plugin's own preferences are excluded. They describe alarms scheduled
+  on *that* device, including the pending-tick queue that hands a lock-screen Done from
+  the notification isolate to the app. Restoring those onto a new phone would reference
+  reminders it never scheduled, and could replay a tick nobody answered.
+-->
+<full-backup-content>
+    <include domain="sharedpref" path="." />
+    <exclude domain="sharedpref" path="flutter_local_notifications_plugin.xml" />
+    <exclude domain="sharedpref" path="notification_plugin_cache.xml" />
+    <exclude domain="sharedpref" path="scheduled_notifications.xml" />
+</full-backup-content>

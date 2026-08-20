@@ -6,9 +6,12 @@ library;
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../core/weight_trend.dart';
 import '../domain/foods.dart';
+import '../domain/clock.dart';
+import 'primitives.dart';
 import '../theme.dart';
 
 // --------------------------------------------------------------------- water
@@ -166,32 +169,193 @@ class _WavePainter extends CustomPainter {
 /// Raw weigh-ins are scattered dots behind a confident trend line — the product's whole
 /// thesis, drawn. Dots earn their place at a month, shrink at a quarter, and are dropped
 /// at a year where 365 of them are texture rather than information.
-class TrendChart extends StatelessWidget {
+/// Horizontal padding inside the chart. Shared, because the painter and the hit-test
+/// have to agree on where a point sits — if they drift, the crosshair lands next to the
+/// dot it claims to be reading.
+const _chartPad = 7.0;
+
+double _chartX(int i, int n, double width) =>
+    _chartPad + (i / (n - 1)) * (width - _chartPad * 2);
+
+/// Vertical scale for a slice. Shared by the painter and the readout for the same
+/// reason as [_chartX]: two copies of this arithmetic would eventually disagree, and
+/// the symptom would be a tooltip that dodges the wrong way.
+class _ChartScale {
+  final double lo, span;
+  const _ChartScale(this.lo, this.span);
+
+  factory _ChartScale.of(List<TrendPoint> slice, bool showDots) {
+    final vals = [
+      ...slice.map((p) => p.trend),
+      if (showDots) ...slice.map((p) => p.raw),
+    ];
+    final lo = vals.reduce(math.min) - 0.25;
+    final hi = vals.reduce(math.max) + 0.25;
+    return _ChartScale(lo, math.max(0.1, hi - lo));
+  }
+
+  double y(double v, double height) =>
+      _chartPad + (1 - (v - lo) / span) * (height - _chartPad * 2);
+}
+
+class TrendChart extends StatefulWidget {
   final List<TrendPoint> points;
   final int days;
   final double height;
-  const TrendChart(
-      {super.key, required this.points, required this.days, this.height = 92});
+  const TrendChart({
+    super.key,
+    required this.points,
+    required this.days,
+    this.height = 92,
+  });
+
+  @override
+  State<TrendChart> createState() => _TrendChartState();
+}
+
+class _TrendChartState extends State<TrendChart> {
+  /// Index into the visible slice that the finger is on, or null when untouched.
+  int? _touched;
+
+  List<TrendPoint> get _slice => widget.points.length > widget.days
+      ? widget.points.sublist(widget.points.length - widget.days)
+      : widget.points;
+
+  void _pick(double dx, double width) {
+    final n = _slice.length;
+    if (n < 2) return;
+    // Nearest point, not the one under the finger: a fingertip is far wider than the
+    // gap between daily points, so "inside this band" would be ambiguous where
+    // "closest to" never is.
+    final t = ((dx - _chartPad) / (width - _chartPad * 2)).clamp(0.0, 1.0);
+    final i = (t * (n - 1)).round();
+    if (i != _touched) {
+      setState(() => _touched = i);
+      HapticFeedback.selectionClick();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final c = AppTheme.of(context);
-    final slice = points.length > days ? points.sublist(points.length - days) : points;
-    if (slice.length < 2) return SizedBox(height: height);
-    return SizedBox(
-      height: height,
-      width: double.infinity,
-      child: RepaintBoundary(
-        child: CustomPaint(
-        painter: _TrendPainter(
-          slice: slice,
-          showDots: days <= 90,
-          dotR: days <= 30 ? 1.9 : 1.2,
-          line: c.line,
-          dot: c.ink3,
-          accent: c.accent,
+    final slice = _slice;
+    if (slice.length < 2) return SizedBox(height: widget.height);
+
+    return LayoutBuilder(
+      builder: (ctx, box) {
+        final w = box.maxWidth;
+        final i = _touched;
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapDown: (d) => _pick(d.localPosition.dx, w),
+          onTapUp: (_) => setState(() => _touched = null),
+          onTapCancel: () => setState(() => _touched = null),
+          // Horizontal only, so the vertical scroll of the page still wins — scrubbing
+          // a chart should never fight the list it sits in.
+          onHorizontalDragStart: (d) => _pick(d.localPosition.dx, w),
+          onHorizontalDragUpdate: (d) => _pick(d.localPosition.dx, w),
+          onHorizontalDragEnd: (_) => setState(() => _touched = null),
+          onHorizontalDragCancel: () => setState(() => _touched = null),
+          child: SizedBox(
+            height: widget.height,
+            width: double.infinity,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                RepaintBoundary(
+                  child: CustomPaint(
+                    size: Size(w, widget.height),
+                    painter: _TrendPainter(
+                      slice: slice,
+                      showDots: widget.days <= 90,
+                      dotR: widget.days <= 30 ? 1.9 : 1.2,
+                      line: c.line,
+                      dot: c.ink3,
+                      accent: c.accent,
+                      touched: i,
+                      ink: c.ink,
+                    ),
+                  ),
+                ),
+                if (i != null)
+                  _readout(
+                    c,
+                    slice[i],
+                    _chartX(i, slice.length, w),
+                    w,
+                    _ChartScale.of(slice, widget.days <= 90)
+                        .y(slice[i].trend, widget.height),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// The date-and-weight card that follows the finger.
+  ///
+  /// A widget rather than canvas text, so it inherits the app's type and colours
+  /// instead of a second, drifting copy of them.
+  Widget _readout(Palette c, TrendPoint p, double x, double w, double pointY) {
+    const cardW = 132.0;
+    const cardH = 46.0;
+    // Flip to whichever half is free. A tooltip that covers the very point it is
+    // reading is worse than no tooltip, and on a 92dp chart there is only ever room
+    // on one side.
+    final below = pointY < widget.height / 2;
+    // Kept inside the chart: near either edge it would otherwise hang off, and a
+    // readout you cannot read is worse than none.
+    final left = (x - cardW / 2).clamp(0.0, math.max(0.0, w - cardW)).toDouble();
+    final d = DateTime.parse(p.date);
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', //
+    ];
+
+    return Positioned(
+      left: left,
+      top: below ? widget.height - cardH : -4,
+      width: cardW,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: BoxDecoration(
+          color: c.surface,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: c.line),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.10),
+              blurRadius: 12,
+              offset: const Offset(0, 3),
+            ),
+          ],
         ),
-      ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('${dowShort[d.weekday % 7]} ${d.day} ${months[d.month - 1]}'
+                .toUpperCase(),
+                style: labelStyle(c)),
+            const SizedBox(height: 3),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Num(p.raw.toStringAsFixed(1), size: 18, color: c.ink),
+                const SizedBox(width: 3),
+                Text('kg', style: sans(c, size: 10.5, color: c.ink3)),
+                const Spacer(),
+                // The trend is what the app actually acts on, so it is worth showing
+                // beside the number the scale gave.
+                Text('trend ${p.trend.toStringAsFixed(1)}',
+                    style: sans(c, size: 10, color: c.accent)),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -201,7 +365,11 @@ class _TrendPainter extends CustomPainter {
   final List<TrendPoint> slice;
   final bool showDots;
   final double dotR;
-  final Color line, dot, accent;
+  final Color line, dot, accent, ink;
+
+  /// Index the finger is on, or null.
+  final int? touched;
+
   const _TrendPainter({
     required this.slice,
     required this.showDots,
@@ -209,21 +377,17 @@ class _TrendPainter extends CustomPainter {
     required this.line,
     required this.dot,
     required this.accent,
+    required this.ink,
+    this.touched,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
-    const pad = 7.0;
-    final vals = [
-      ...slice.map((p) => p.trend),
-      if (showDots) ...slice.map((p) => p.raw),
-    ];
-    final lo = vals.reduce(math.min) - 0.25;
-    final hi = vals.reduce(math.max) + 0.25;
-    final span = math.max(0.1, hi - lo);
+    const pad = _chartPad;
+    final scale = _ChartScale.of(slice, showDots);
 
-    double x(int i) => pad + (i / (slice.length - 1)) * (size.width - pad * 2);
-    double y(double v) => pad + (1 - (v - lo) / span) * (size.height - pad * 2);
+    double x(int i) => _chartX(i, slice.length, size.width);
+    double y(double v) => scale.y(v, size.height);
 
     final grid = Paint()..color = line;
     for (final g in [0.25, 0.5, 0.75]) {
@@ -252,6 +416,28 @@ class _TrendPainter extends CustomPainter {
           ..strokeJoin = StrokeJoin.round
           ..strokeCap = StrokeCap.round);
 
+    // Crosshair, drawn after the line so it reads on top of it but before the end
+    // marker, which should stay the brightest thing on the chart.
+    final t = touched;
+    if (t != null && t >= 0 && t < slice.length) {
+      final tx = x(t);
+      canvas.drawLine(
+        Offset(tx, pad * 0.4),
+        Offset(tx, size.height - pad * 0.4),
+        Paint()
+          ..color = ink.withValues(alpha: 0.28)
+          ..strokeWidth = 1.2,
+      );
+      final tp = Offset(tx, y(slice[t].trend));
+      canvas.drawCircle(tp, 5.5, Paint()..color = accent.withValues(alpha: 0.18));
+      canvas.drawCircle(tp, 3.2, Paint()..color = accent);
+      if (showDots) {
+        // The raw weigh-in for that day, brought up out of the faint scatter.
+        canvas.drawCircle(
+            Offset(tx, y(slice[t].raw)), dotR + 1.4, Paint()..color = dot);
+      }
+    }
+
     final end = Offset(x(slice.length - 1), y(slice.last.trend));
     canvas.drawCircle(
         end,
@@ -264,7 +450,8 @@ class _TrendPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_TrendPainter old) => old.slice != slice || old.accent != accent;
+  bool shouldRepaint(_TrendPainter old) =>
+      old.touched != touched || old.slice != slice || old.accent != accent;
 }
 
 // -------------------------------------------------------------------- intake

@@ -1,3 +1,28 @@
+import java.util.Properties
+import java.io.FileInputStream
+
+// Upload signing, kept out of the repo.
+//
+// `android/key.properties` names the keystore and its passwords; `.gitignore` already
+// excludes it along with *.jks and *.keystore, and it must stay that way — the upload
+// key is the app's identity on Play, and anyone holding it can publish as you.
+//
+// Absent, the build falls back to the debug key so `flutter run --release` still works
+// on a machine that has no keystore. That fallback is announced at build time, because
+// a debug-signed AAB is rejected by Play and the failure otherwise arrives at upload,
+// long after the build looked fine.
+val keystorePropertiesFile = rootProject.file("key.properties")
+val keystoreProperties = Properties()
+val hasUploadKey = keystorePropertiesFile.exists()
+if (hasUploadKey) {
+    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+} else {
+    logger.warn(
+        "\n  key.properties not found — release builds will be signed with the DEBUG " +
+        "key.\n  Play will reject that. See mobile/README.md, Signing.\n"
+    )
+}
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
@@ -32,11 +57,25 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        create("upload") {
+            if (hasUploadKey) {
+                keyAlias = keystoreProperties["keyAlias"] as String
+                keyPassword = keystoreProperties["keyPassword"] as String
+                storeFile = keystoreProperties["storeFile"]?.let { file(it) }
+                storePassword = keystoreProperties["storePassword"] as String
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (hasUploadKey) {
+                signingConfigs.getByName("upload")
+            } else {
+                // Debug key, so a release build still runs locally without a keystore.
+                signingConfigs.getByName("debug")
+            }
         }
     }
 }

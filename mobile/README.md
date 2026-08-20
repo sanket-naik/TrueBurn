@@ -71,7 +71,7 @@ testable.
 
 ```bash
 flutter analyze          # clean
-flutter test             # 41 tests
+flutter test             # 68 tests
 dart run tool/sim.dart   # the port's proof, below
 dart run tool/bench.dart # engine cost per frame
 flutter build apk --debug
@@ -119,6 +119,18 @@ plausible-looking one.
 - **First-launch tour**: four pages, skippable from any of them, shown once. It exists
   because the central idea is invisible from the UI — without it the app looks like a
   plainer version of what people already have
+- **210 foods**, natural units by default and grams where the food is weighed. A test
+  asserts no duplicate names: a duplicate splits one food's history across two
+  identical-looking rows, so portion memory and meal habits each learn half of it
+- **Drift detection**: when measured burn falls 18% below the formula, Today says so —
+  the one reading no food diary can produce, because it needs both figures (§4.2b)
+- **Portion memory**: a food opens at the quantity you usually log it at, and the list
+  leads with what you actually eat at *this* meal rather than what you ate last
+- **Repeat last meal**: one tap re-logs yesterday's breakfast, the commonest wasted
+  minute in the app
+- **Weigh-in sanity check**: an entry more than 3 kg from the trend asks before it
+  joins — weight is the input everything derives from, and nothing downstream ever
+  looks obviously wrong after a slipped digit
 - **History**: opened by tapping the date on Today. Range summary over 7 or 30 days,
   predicted-vs-actual, and a day list that opens one day in detail
 - Sheets: food picker (grouped, quantity projection, reusable custom foods), weigh-in
@@ -277,6 +289,84 @@ who skips still gets asked, on the first frame of a screen they recognise rather
 splash. Nothing breaks on refusal — scheduling still succeeds, the notifications simply
 do not display.
 
+## Signing
+
+`android/app/build.gradle.kts` reads `android/key.properties` when it exists and signs
+release builds with it; when it does not, it falls back to the debug key and says so in
+the build log. That fallback exists so `flutter run --release` works on a machine
+without the keystore — **Play rejects debug-signed uploads**, and without the warning
+that failure only surfaces at upload time, long after the build looked fine.
+
+Generate the upload key once:
+
+```bash
+keytool -genkey -v -keystore ~/trueburn-upload.jks -keyalg RSA \
+  -keysize 2048 -validity 10000 -alias upload
+```
+
+Then create `android/key.properties`:
+
+```
+storePassword=<the store password>
+keyPassword=<the key password>
+keyAlias=upload
+storeFile=/Users/you/trueburn-upload.jks
+```
+
+`.gitignore` already excludes `key.properties`, `*.jks` and `*.keystore`. Keep it that
+way: the upload key is the app's identity on Play, anyone holding it can publish as you,
+and **losing it means you can never update the app again** — a new key is a new listing.
+Back it up somewhere you will still have in five years.
+
+Check what actually signed a build rather than assuming:
+
+```bash
+apksigner verify --print-certs app-arm64-v8a-release.apk | grep "certificate DN"
+```
+
+`CN=Android Debug` means the fallback was used. Anything else means the keystore was
+picked up.
+
+## The release build hangs on the splash if you strip one PNG
+
+Worth its own section, because it is the worst failure this project has produced and it
+is invisible until you run a release build.
+
+`ic_notification` is referenced **only from Dart**, as the string literal
+`'@drawable/ic_notification'` passed to `AndroidInitializationSettings`. No Kotlin and no
+XML mentions it, so the release resource shrinker cannot see the reference and removes
+the file — leaving the resource *id* in the table with no densities behind it.
+
+The consequence is not a missing icon:
+
+```
+Unhandled Exception: PlatformException(invalid_icon,
+  The resource @drawable/ic_notification could not be found...)
+```
+
+`initialize()` throws, the exception escapes `Notifications.init()`, `_boot` never
+completes, and **the app sits on its splash screen forever**. No crash dialog, nothing in
+the UI, debug entirely unaffected.
+
+Two defences, both needed:
+
+1. `android/app/src/main/res/raw/keep.xml` lists it under `tools:keep`. Anything else
+   named from Dart must be added there too. **It needs a `flutter clean`** — stale merged
+   resources will keep stripping it and make the fix look like it did not work.
+2. `Notifications.init()` catches everything. Reminders are a feature; weight and food
+   are the product. A tracker that cannot remind you is degraded, one that will not open
+   is broken.
+
+Do not verify this by grepping the APK for the filename. Release resources are renamed —
+`ic_notification.png` becomes `res/hQ.png` — so a name search reports it missing even
+when it is present. Read the resource table instead:
+
+```bash
+aapt2 dump resources app-arm64-v8a-release.apk | grep -A4 drawable/ic_notification
+```
+
+Densities listed under the id means it survived; the bare id alone means it was stripped.
+
 ## Notifications (Android)
 
 Wired and **verified end to end on device**: reminder fires → Done tapped from the
@@ -302,6 +392,14 @@ Four things had to be right, and three of them fail silently:
 `am force-stop` blocks broadcast delivery until the user relaunches, so it is not a
 valid way to test this. Background the app instead.
 
+**Verified end to end on a release build** (obfuscated, R8-shrunk), not just in debug:
+the alarm registers as `RTC_WAKEUP ... window=0 exactAllowReason=policy_permission`
+— exact, not the inexact one-hour window — the notification arrives with Done / In 30
+min / Skip, tapping Done with the app backgrounded queues the tick from the background
+isolate, and reopening applies it to the routine *and* to the water total on Today
+(§7.4). `run-as` does not work against a release build, so seeding state for this test
+needs root.
+
 ## UI notes
 
 Things that only became visible on a real screen, and what they turned into:
@@ -322,6 +420,33 @@ Things that only became visible on a real screen, and what they turned into:
   it reports. Empty states are now faint fills with no border, times are chips that
   flow two to a line, and days are solid-vs-quiet circles with no borders at all. The
   editor went from needing a scroll to fitting on one screen.
+
+- **Over target reads as over target.** The headline ran
+  `(target - consumed).abs()`, so 720 kcal *over* rendered identically to 720 kcal
+  *left* — same digits, same label, on the one number the screen exists to communicate.
+  The meter already knew. Now the label switches to "Over by", the figure and the panel
+  border go amber, and the meter's existing over state finally agrees with the text
+  above it.
+
+- **The food list is windowed.** It used to build every row on every rebuild — including
+  every keystroke in the search box, which is exactly when the frame budget matters. At
+  73 foods that was survivable; at 210 it is not. `showAppSheet` now takes
+  `scrollable: false` to hand the sheet a *bounded* box so it can own a
+  `ListView.builder`, because nesting a lazy list inside the wrapper's
+  `SingleChildScrollView` is what made settings unscrollable once already.
+
+- **The weight chart is scrubable.** Touch or drag it and a vertical line marks the
+  nearest day, with its date, the weigh-in and the trend value. Three details that took
+  a second pass:
+
+  * The readout **flips to whichever half is free** — below the point when the trend is
+    high there, above it when low. A tooltip that covers the very point it is reading
+    is worse than no tooltip, and a 92dp chart has room on one side only.
+  * The x and y mappings live in `_chartX` and `_ChartScale`, shared by the painter and
+    the hit-test. Two copies of that arithmetic drift, and the symptom is a crosshair
+    landing beside the dot it claims to read.
+  * Only `onHorizontalDrag*` is handled, never vertical, so scrubbing never fights the
+    page scroll underneath it.
 
 - **State changes move, they do not cut.** Two shared primitives in `primitives.dart`:
   `SmoothSwap` slides and fades one control past another (the water card's amounts

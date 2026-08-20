@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The notification icon is referenced ONLY from Dart, as the string literal
+  '@drawable/ic_notification' passed to AndroidInitializationSettings. Nothing in
+  Kotlin or in any XML resource mentions it, so the release resource shrinker cannot
+  see the reference and removes it.
+
+  The consequence is not a missing icon. The plugin throws
+  PlatformException(invalid_icon) from initialize(), which propagates out of
+  Notifications.init(), so _boot never completes and the app sits on the splash
+  forever — release only, invisible in debug, and with no crash dialog to hint at it.
+
+  Anything else referenced by name from Dart must be listed here too.
+-->
+<resources
+    xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/ic_notification" />

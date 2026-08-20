@@ -164,6 +164,40 @@ it was written for without the user's guess about themselves entering into it. A
 default activity level the new band is what the old bounds already produced, so §10's
 results are unchanged but for one figure (persona 6's floor moves 15% to 14%).
 
+### 4.2b Telling the user when the log has drifted
+
+The app holds two independent expenditure figures: the **formula**, which knows only
+height, weight and age, and the **measurement**, which comes from the food log and the
+scale. Nothing else on the market holds both, so nothing else can notice when they
+disagree — and a sustained disagreement has one overwhelmingly likely cause, which is
+food going unrecorded.
+
+Surfaced on Today when the measurement sits **18% or more below** the formula, worded as
+an observation about the *log*, never about the person.
+
+**Not predicted-versus-actual.** That pairing is the obvious test and is useless for
+this: measured TDEE is *defined* as average intake minus the weight change, so predicted
+and actual reconcile by construction and can never diverge enough to report. This was
+built the wrong way round first and caught by testing, not by review.
+
+The 18% threshold is set from the simulation, averaging measured TDEE over each
+persona's last twenty days:
+
+| persona | measured vs formula |
+|---|---|
+| honest logger | +3% |
+| under-records 15% | −9% |
+| under-records 25% | −17% |
+| under-records 40% | −32% |
+
+§1 puts Mifflin–St Jeor at ±10–15% for any given person, so anything inside that band is
+indistinguishable from an unusual metabolism. 18% clears both the honest logger and the
+formula's own error — at the deliberate cost of missing the 25% under-recorder. That
+trade is chosen, not accidental: a false accusation is unfixable by the person receiving
+it, while §4.3 shows the engine tolerates systematic under-reporting. The upward
+direction needs 30%, because a fast metabolism is common and real whereas nobody logs
+food they did not eat by accident.
+
 ### 4.3 Why under-reporting does not break it
 
 Let `f` be the user's systematic logging factor (0.75 = logs 25% low), `T` true TDEE,

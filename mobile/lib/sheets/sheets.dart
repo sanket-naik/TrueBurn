@@ -4,10 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../core/targets.dart';
+import '../core/tdee.dart';
 import '../core/types.dart';
 import '../core/weight_trend.dart';
 import '../domain/clock.dart';
 import '../domain/foods.dart';
+import '../domain/insights.dart';
 import '../domain/routine.dart';
 import '../store.dart';
 import '../theme.dart';
@@ -147,6 +149,9 @@ class _WeighSheetState extends State<_WeighSheet> {
     final next = trend.isNotEmpty ? prev + trendAlpha * (v - prev) : v;
     final move = next - prev;
     final loggedToday = widget.s.weighIns.any((w) => w.date == isoOf(DateTime.now()));
+    // Checked against the trend it is about to join, not the last raw number — one
+    // heavy morning should not make the next day's honest reading look suspicious.
+    final check = checkWeighIn(v, trend.isEmpty ? null : prev);
 
     return Padding(
       padding: _pad,
@@ -224,6 +229,23 @@ class _WeighSheetState extends State<_WeighSheet> {
                 if (d != 1.0) const SizedBox(width: 6),
               ],
             ],
+          ),
+          // Weight is the input every other number derives from, so a slipped digit
+          // corrupts the expenditure measurement for weeks — and unlike a mistyped
+          // food, nothing downstream ever looks obviously wrong.
+          SmoothReveal(
+            visible: !_rejected && check.verdict == WeighInVerdict.farFromTrend,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Notice(
+                'That is ${check.delta.abs().toStringAsFixed(1)} kg '
+                '${check.delta > 0 ? 'above' : 'below'} your trend of '
+                '${prev.toStringAsFixed(1)} kg. Weight really does move a kilo or two '
+                'on water alone — save it if it is right. This is only here to catch a '
+                'slipped digit.',
+                tone: 'warn',
+              ),
+            ),
           ),
           // Grows into place rather than shoving the trend panel down a notch.
           SmoothReveal(
@@ -323,7 +345,10 @@ Future<void> showFoodSheet(BuildContext context, Store s, int consumed, double? 
   return showAppSheet(
     context,
     (ctx) => _FoodSheet(s, consumed, target, key: key),
-    // Pinned so it is reachable without scrolling seventy items.
+    // The sheet owns its own lazy list, so it must not be wrapped in another scroll
+    // view — see showAppSheet.
+    scrollable: false,
+    // Pinned so it is reachable without scrolling the whole catalogue.
     footer: (ctx) =>
         SecondaryButton('+ Add your own food', onTap: () => key.currentState?.openCustom()),
   );
@@ -544,14 +569,31 @@ class _FoodSheetState extends State<_FoodSheet> {
       );
     }
 
+    final now = DateTime.now();
+    final meal = mealFor(minutesOfDay(now));
+    final log = widget.s.loggedItems;
+    final repeat = repeatableMeal(log, meal, isoOf(now));
+
     final groups = q.trim().isEmpty
-        ? browseGroups(widget.s.recents, widget.s.customFoods)
+        ? browseGroups(
+            widget.s.recents,
+            widget.s.customFoods,
+            habitual: habitualFor(log, meal),
+            habitLabel: 'Usually at ${meal.label.toLowerCase()}',
+          )
         : [
             FoodGroup(
               'matches, lightest first',
               searchFoods(q, widget.s.recents, widget.s.customFoods),
             ),
           ];
+
+    final rows = <_FoodRow>[
+      for (final g in groups) ...[
+        _FoodRow.header(g.label),
+        for (final f in g.items) _FoodRow.item(f),
+      ],
+    ];
 
     return Padding(
       padding: _pad,
@@ -560,45 +602,91 @@ class _FoodSheetState extends State<_FoodSheet> {
         children: [
           Text('Add food', style: _title(c)),
           const SizedBox(height: 12),
+          if (repeat != null && q.trim().isEmpty) ...[
+            _RepeatMealCard(
+              repeat: repeat,
+              onTap: () {
+                widget.s.repeatMeal(repeat);
+                Navigator.pop(context);
+              },
+            ),
+            const SizedBox(height: 12),
+          ],
           TextField(
             decoration: _dec(c, 'Search dal, roti, coffee…'),
             onChanged: (v) => setState(() => q = v),
           ),
           const SizedBox(height: 12),
-          for (final g in groups) ...[
-            Label(g.label),
-            const SizedBox(height: 4),
-            for (final f in g.items)
-              InkWell(
-                onTap: () => setState(() {
-                  pick = f;
-                  qty = 1;
-                }),
-                borderRadius: BorderRadius.circular(10),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 10),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(f.n, style: TextStyle(fontSize: 13.5, color: c.ink)),
-                            Text(f.u, style: sans(c, size: 11.5, color: c.ink3)),
-                          ],
+          // Windowed. The catalogue is a few hundred items and every one of them used
+          // to be constructed on every rebuild — including every keystroke in the
+          // search box, which is exactly when the frame budget matters. A builder only
+          // makes the dozen rows actually on screen.
+          Expanded(
+            child: ListView.builder(
+              padding: EdgeInsets.zero,
+              itemCount: rows.length,
+              itemExtent: null,
+              itemBuilder: (ctx, i) {
+                final row = rows[i];
+                if (row.header != null) {
+                  return Padding(
+                    padding: EdgeInsets.fromLTRB(10, i == 0 ? 0 : 14, 10, 4),
+                    child: Row(
+                      children: [
+                        Label(row.header!),
+                        const Spacer(),
+                        // The unit lives in the header rather than on every row, where
+                        // it would treble the ink in that column to repeat one word.
+                        Text('KCAL', style: labelStyle(c)),
+                      ],
+                    ),
+                  );
+                }
+                final f = row.food!;
+                return InkWell(
+                  onTap: () => setState(() {
+                    pick = f;
+                    // What this person actually logs for it, not a blank 1.
+                    qty = typicalQty(widget.s.loggedItems, f.n) ?? 1;
+                  }),
+                  borderRadius: BorderRadius.circular(10),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 10),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(f.n,
+                                  style: TextStyle(fontSize: 13.5, color: c.ink)),
+                              Text(f.u, style: sans(c, size: 11.5, color: c.ink3)),
+                            ],
+                          ),
                         ),
-                      ),
-                      Num('${f.k}', size: 12.5, color: c.ink2),
-                    ],
+                        Num('${f.k}', size: 12.5, color: c.ink2),
+                      ],
+                    ),
                   ),
-                ),
-              ),
-            const SizedBox(height: 8),
-          ],
+                );
+              },
+            ),
+          ),
         ],
       ),
     );
   }
+}
+
+/// One line of the food list: either a group heading or a food.
+///
+/// Flattening the groups is what lets a single `ListView.builder` window the whole
+/// thing — a nested build per group would defeat the point.
+class _FoodRow {
+  final String? header;
+  final Food? food;
+  const _FoodRow.header(this.header) : food = null;
+  const _FoodRow.item(this.food) : header = null;
 }
 
 // ------------------------------------------------------------ routine editor
@@ -1189,14 +1277,29 @@ class _SettingsSheetState extends State<_SettingsSheet> {
                 ),
               ),
               const SizedBox(height: 12),
-              Notice(
-                'Your daily target is ${t.kcal?.round() ?? '—'} kcal — measured expenditure '
-                '${report.energy.tdee.kcal.round()} minus the deficit for this goal.',
-                tone: 'accent',
-              ),
-              for (final w in t.warnings) ...[
-                const SizedBox(height: 8),
-                Notice(w, tone: 'warn'),
+              // Before the first weigh-in there is no weight, so there is no
+              // expenditure figure either — and this used to render it as "measured
+              // expenditure 0", which is both false (nothing was measured) and absurd
+              // (nobody burns nothing). The floor warning underneath then fired *because*
+              // of that zero, so a brand-new install opened Settings to two alarming
+              // sentences about numbers that did not exist yet.
+              if (!s.hasWeight)
+                const Notice(
+                  'Your target appears once you log a weight — the whole calculation '
+                  'starts from it.',
+                )
+              else ...[
+                Notice(
+                  'Your daily target is ${t.kcal?.round() ?? '—'} kcal — '
+                  '${report.energy.tdee.mode == TdeeMode.measured ? 'measured' : 'estimated'} '
+                  'expenditure ${report.energy.tdee.kcal.round()} minus the deficit for '
+                  'this goal.',
+                  tone: 'accent',
+                ),
+                for (final w in t.warnings) ...[
+                  const SizedBox(height: 8),
+                  Notice(w, tone: 'warn'),
+                ],
               ],
             ],
           ),
@@ -1205,9 +1308,8 @@ class _SettingsSheetState extends State<_SettingsSheet> {
           _group(
             c,
             'Starting estimate',
-            'These only shape the first three weeks. Once TrueBurn has enough '
-                'weigh-ins it measures your expenditure directly and stops using them. '
-                'Pick the basal formula that fits you rather than having one inferred.',
+            'Only used for about three weeks, until there are enough weigh-ins to '
+                'measure you directly.',
             [
               SegControl<FormulaVariant>(
                 value: s.profile.formulaVariant,
@@ -1430,6 +1532,68 @@ class _DayPreset extends StatelessWidget {
               color: active ? c.accent : c.ink3,
               weight: active ? FontWeight.w600 : FontWeight.w500,
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// One tap to log the same meal again.
+///
+/// Most people eat repetitively, so re-entering yesterday's breakfast item by item is
+/// the commonest wasted minute in the app — and §8.1 names logging *coverage*, not
+/// accuracy, as the thing the whole measurement depends on.
+class _RepeatMealCard extends StatelessWidget {
+  final RepeatableMeal repeat;
+  final VoidCallback onTap;
+  const _RepeatMealCard({required this.repeat, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = AppTheme.of(context);
+    final n = repeat.items.length;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: c.accentSoft,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: c.accent.withValues(alpha: 0.3)),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.replay_rounded, size: 18, color: c.accent),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Repeat your last ${repeat.meal.label.toLowerCase()}',
+                      style: sans(c, size: 13.5, color: c.accent,
+                          weight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 1),
+                    Text(
+                      // Names it, so this is never a blind tap.
+                      repeat.items.map((e) => e.name).join(', '),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: sans(c, size: 11.5, color: c.ink2),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Num('${repeat.kcal}', size: 13, color: c.accent),
+              Text(n > 1 ? '  kcal · $n' : '  kcal',
+                  style: sans(c, size: 10.5, color: c.ink3)),
+            ],
           ),
         ),
       ),

@@ -16,6 +16,7 @@ import 'core/report.dart';
 import 'core/tdee.dart';
 import 'core/types.dart';
 import 'domain/history.dart';
+import 'domain/insights.dart';
 import 'domain/clock.dart';
 import 'domain/foods.dart';
 import 'domain/routine.dart';
@@ -188,6 +189,29 @@ class Store extends ChangeNotifier {
 
     return (rows: rows, summary: summarise(rows, weighIns, todayNum));
   }
+
+  /// The food log in the shape `domain/insights.dart` works on.
+  ///
+  /// That layer deliberately does not import this file — it stays Flutter-free so it can
+  /// be proven in plain Dart tests — so the adapting happens here.
+  List<LoggedItem> get loggedItems => [
+        for (final e in entries)
+          (
+            date: e.date,
+            name: e.name,
+            unit: e.unit,
+            qty: e.qty,
+            kcal: e.kcal,
+            meal: e.meal,
+          ),
+      ];
+
+  /// Whether the measured burn has drifted away from the formula's estimate.
+  ///
+  /// Reads straight off the memoised daily report, so it costs nothing — the earlier
+  /// version swept 30 days of engine runs to compare predicted against actual, which
+  /// turned out to be both expensive and structurally incapable of detecting anything.
+  LogDrift drift([DateTime? now]) => detectDrift(report(now).energy.tdee);
 
   DailyReport _compute(String today, int year) {
     return dailyReport(
@@ -381,6 +405,38 @@ class Store extends ChangeNotifier {
         ),
       ];
       recents = [f.n, ...recents.where((n) => n != f.n)].take(6).toList();
+      routines = satisfyFood(routines, nowMin, dowOf(now), paused);
+    });
+  }
+
+  /// Log every item of a past meal again, in one go.
+  ///
+  /// Dated today and re-tagged to the meal that is current *now*, not the one the items
+  /// were originally eaten in — repeating yesterday's breakfast at 8 am is breakfast.
+  /// It writes through one mutation so the whole meal is a single undoable act rather
+  /// than four separate ones.
+  void repeatMeal(RepeatableMeal m) {
+    final now = DateTime.now();
+    final nowMin = minutesOfDay(now);
+    final today = isoOf(now);
+    final stamp = now.microsecondsSinceEpoch;
+    _set(() {
+      entries = [
+        ...entries,
+        for (var i = 0; i < m.items.length; i++)
+          Entry(
+            '${stamp + i}',
+            today,
+            m.items[i].name,
+            m.items[i].unit,
+            m.items[i].qty,
+            m.items[i].kcal,
+            mealFor(nowMin),
+          ),
+      ];
+      for (final it in m.items) {
+        recents = [it.name, ...recents.where((n) => n != it.name)].take(6).toList();
+      }
       routines = satisfyFood(routines, nowMin, dowOf(now), paused);
     });
   }

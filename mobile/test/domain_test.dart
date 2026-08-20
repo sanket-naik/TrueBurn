@@ -421,6 +421,25 @@ void main() {
   });
 
   group('food list', () {
+    test('no duplicate names', () {
+      // The catalogue is edited by hand and grew from 73 to 200+ in one sitting;
+      // eleven duplicates slipped in on that pass. A duplicate is not cosmetic — it
+      // splits a food's history between two identical-looking rows, so portion memory
+      // and meal habits both learn half of what they should.
+      final names = seedFoods.map((f) => f.n).toList();
+      expect(names.length, names.toSet().length,
+          reason: 'duplicate food names in seedFoods');
+    });
+
+    test('every food has a unit and a sane calorie figure', () {
+      for (final f in seedFoods) {
+        expect(f.n.trim(), isNotEmpty);
+        expect(f.u.trim(), isNotEmpty, reason: '${f.n} has no unit');
+        expect(f.k, greaterThanOrEqualTo(0), reason: '${f.n} has negative kcal');
+        expect(f.k, lessThan(1200), reason: '${f.n} looks like a typo at ${f.k} kcal');
+      }
+    });
+
     final recents = ['Dal tadka', 'Roti / chapati'];
     final custom = [const Food("Amma's sambar", '1 katori', 160)];
 
