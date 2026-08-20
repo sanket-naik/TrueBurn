@@ -289,6 +289,40 @@ who skips still gets asked, on the first frame of a screen they recognise rather
 splash. Nothing breaks on refusal — scheduling still succeeds, the notifications simply
 do not display.
 
+## Backup, and a privacy claim that was false
+
+Android's Auto Backup is **on by default**. Nothing in the manifest declared it, so the
+app was already copying `shared_preferences` into the user's Google Drive — while two
+screens promised *"nothing is uploaded, and nothing leaves the device."* That claim was
+untrue in every build shipped before this one, and Play's Data Safety form is a bad
+place to be casually wrong.
+
+Resolved by making it deliberate rather than accidental:
+
+- `backup_rules.xml` (Android 11 and below) and `data_extraction_rules.xml` (12+,
+  covering both cloud backup and phone-to-phone transfer) are declared explicitly.
+- Both **exclude the notification plugin's own preferences**. Those describe alarms
+  scheduled on one specific device, including the pending-tick queue that carries a
+  lock-screen Done from the notification isolate to the app. Restored onto a new phone
+  they would reference reminders it never scheduled, and could replay a tick nobody
+  answered.
+- The copy now says what is actually true: no account, nothing sent to *us*, and the
+  data rides along in the user's own Drive backup — with where to switch that off.
+
+Verified by round trip, not by reading the docs:
+
+```bash
+adb shell bmgr transport com.android.localtransport/.LocalTransport
+adb shell bmgr backupnow com.funnudge.trueburn   # 46,592 bytes
+adb uninstall com.funnudge.trueburn              # wipes everything
+adb install app-debug.apk                        # nothing seeded
+adb shell bmgr restore 1 com.funnudge.trueburn
+```
+
+The app came back reporting "34 days of data" with the full weight trend, and the
+notification prefs were correctly absent. A **force-stopped app cannot be backed up** —
+`bmgr` reports "Backup is not allowed", which reads like a manifest error and is not.
+
 ## Signing
 
 `android/app/build.gradle.kts` reads `android/key.properties` when it exists and signs

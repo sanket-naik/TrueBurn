@@ -1358,8 +1358,9 @@ class _SettingsSheetState extends State<_SettingsSheet> {
           _group(
             c,
             'Your data',
-            'Everything stays on this phone. There is no account, nothing is '
-                'uploaded, and nothing leaves the device.',
+            'There is no account and no server of ours — nothing is sent to us. Android '
+                "includes it in your own Google Drive backup, so a new phone keeps your "
+                'history. You can turn that off in Android Settings › Google › Backup.',
             [SecondaryButton('Delete all data', onTap: _confirmErase)],
           ),
         ],

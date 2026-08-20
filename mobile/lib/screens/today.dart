@@ -116,8 +116,8 @@ class _TodayScreenState extends State<TodayScreen> {
                 onTap: () => showWeighSheet(context, s).then((_) => setState(() {}))),
             const SizedBox(height: 10),
             Text(
-              'No account, nothing uploaded. You can add food and water any time — they do '
-              'not need setting up first.',
+              'No account, and nothing is sent to us. You can add food and water any '
+              'time — they do not need setting up first.',
               style: sans(c, size: 12, color: c.ink3),
             ),
           ]),
